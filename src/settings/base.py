@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "core",
     "blog",
+    "chem",
 ]
 
 MIDDLEWARE = [
