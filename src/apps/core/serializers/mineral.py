@@ -310,6 +310,7 @@ class BaseRetrieveSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "slug",
+            "history",
         ]
 
         _inherit_ids = list(
