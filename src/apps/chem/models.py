@@ -7,6 +7,11 @@ from django.db import models
 
 
 class Component(BaseModel, Nameable):
+    is_major = models.BooleanField(
+        null=False,
+        default=False,
+    )
+
     class Meta:
         ordering = [
             "name",
