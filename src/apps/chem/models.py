@@ -29,11 +29,6 @@ class Measurement(BaseModel, Creatable):
         (5, "Slightly altered"),
     )
 
-    PRIMARY_SECONDARY_CHOICES = (
-        (1, "Primary"),
-        (2, "Secondary"),
-    )
-
     TECTONIC_SETTING_CHOICES = (
         (1, "Archean Craton (including Greenstone Belts)"),
         (2, "Complex Volcanic Settings"),
@@ -50,11 +45,16 @@ class Measurement(BaseModel, Creatable):
 
     RESOURCE_CHOICES = ((1, "DIGIS"),)
 
-    key = models.CharField(max_length=200, null=False, unique=True)
+    external_key = models.CharField(max_length=200, null=False, unique=True)
     mineral = models.ForeignKey(
         Mineral,
         on_delete=models.CASCADE,
         related_name="measurements",
+        default=None,
+    )
+    mineral_note = models.TextField(
+        null=True,
+        blank=True,
     )
     resource = models.IntegerField(
         choices=RESOURCE_CHOICES,
@@ -64,7 +64,8 @@ class Measurement(BaseModel, Creatable):
         max_length=200,
         null=False,
     )
-    grain_size = models.TextField(
+    grain_size = models.CharField(
+        max_length=200,
         null=True,
         default=None,
     )
@@ -82,23 +83,30 @@ class Measurement(BaseModel, Creatable):
         null=True,
         default=None,
     )
-    primary_secondary = models.IntegerField(
-        choices=PRIMARY_SECONDARY_CHOICES,
-        null=True,
-        default=None,
-    )
+    is_primary = models.BooleanField(null=False, default=False)
     tectonic_setting = models.IntegerField(
         choices=TECTONIC_SETTING_CHOICES,
         null=True,
         default=None,
     )
+    citation = models.TextField(blank=True, null=True)
+
+    latitude_min = models.FloatField(null=True, default=None)
+    latitude_max = models.FloatField(null=True, default=None)
+    longitude_min = models.FloatField(null=True, default=None)
+    longitude_max = models.FloatField(null=True, default=None)
+    elevation_min = models.FloatField(null=True, default=None)
+    elevation_max = models.FloatField(null=True, default=None)
+
+    location = models.CharField(max_length=350, null=True, default=None)
+    location_note = models.TextField(blank=True, null=True)
 
     class Meta:
         verbose_name = "Measurement"
         verbose_name_plural = "Measurements"
 
 
-class MeasurementComponents(BaseModel):
+class MeasurementComponent(BaseModel):
     UNIT_CHOICES = (
         (1, "ppm"),
         (2, "ppb"),
