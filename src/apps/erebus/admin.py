@@ -22,6 +22,8 @@ class QueueAdmin(admin.ModelAdmin):
     ]
 
     readonly_fields = [
+        "uuid",
+        "size",
         "size_display",
         "mime_type",
         "created_at",
@@ -55,4 +57,4 @@ class QueueAdmin(admin.ModelAdmin):
         return format_html('<span style="color: {};">{}</span>', color, obj.get_status_display())
 
     status_display.short_description = "Status"
-    size_display.short_description = "Size"
+    size_display.short_description = "Size (human-friendly)"

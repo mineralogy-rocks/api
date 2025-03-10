@@ -162,7 +162,12 @@ class Queue(BaseModel, Creatable, Updatable):
     uuid = models.UUIDField(default=uuid.uuid4, unique=True)
 
     user = models.ForeignKey(
-        get_user_model(), on_delete=models.SET_NULL, null=True, help_text=_("User who uploaded the file")
+        get_user_model(),
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        default=None,
+        help_text=_("User who uploaded the file"),
     )
 
     name = models.CharField(max_length=1000, null=False, help_text=_("File name"))
@@ -178,8 +183,6 @@ class Queue(BaseModel, Creatable, Updatable):
     status = models.IntegerField(
         choices=STATUS_CHOICES, default=STATUS_QUEUED, null=False, help_text=_("Processing status")
     )
-
-    chunks = models.ManyToManyField("Chunk", through="QueueChunkThrough", help_text=_("Parsed Chunks of the file"))
 
     class Meta:
         verbose_name = "File Queue"
@@ -199,6 +202,11 @@ class Queue(BaseModel, Creatable, Updatable):
             self.mime_type = _mime_type[0]
         super().save(*args, **kwargs)
 
+    def delete(self, *args, **kwargs):
+        self.status = self.STATUS_ARCHIVED
+        self.save()
+        return self
+
     @property
     def get_unprocessed_url(self):
         return default_storage.url(f"{self.uuid}/unprocessed/")
@@ -216,6 +224,10 @@ class Queue(BaseModel, Creatable, Updatable):
 
 class Chunk(BaseModel, Creatable, Updatable):
     name = models.CharField(max_length=1000, null=False, help_text=_("Chunk name"))
+
+    parent = models.ForeignKey(
+        Queue, on_delete=models.CASCADE, related_name="chunks", help_text=_("Parent file of the chunk")
+    )
     chunk = models.FileField(
         upload_to=_get_parsed_path, storage=ErebusStorage(), null=False, help_text=_("File chunk stored in S3")
     )
