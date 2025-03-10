@@ -73,7 +73,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "core",
     "blog",
-    "chem",
+    "erebus",
 ]
 
 MIDDLEWARE = [
@@ -232,3 +232,9 @@ SPECTACULAR_SETTINGS = {
     # 'SERVE_INCLUDE_SCHEMA': False
     "SWAGGER_UI_DIST": "//unpkg.com/swagger-ui-dist@3.52.2",
 }
+
+
+EREBUS_ACCESS_KEY_ID = os.environ.get("EREBUS_ACCESS_KEY_ID")
+EREBUS_SECRET_ACCESS_KEY = os.environ.get("EREBUS_SECRET_ACCESS_KEY")
+EREBUS_STORAGE_BUCKET_NAME = os.environ.get("EREBUS_STORAGE_BUCKET_NAME")
+EREBUS_S3_ENDPOINT_URL = os.environ.get("EREBUS_S3_ENDPOINT_URL")
