@@ -174,7 +174,11 @@ class Queue(BaseModel, Creatable, Updatable):
     description = models.TextField(null=True, blank=True, help_text=_("Description of the file"))
 
     file = models.FileField(
-        upload_to=_get_upload_path, storage=ErebusStorage(), null=False, help_text=_("File stored in S3")
+        upload_to=_get_upload_path,
+        storage=ErebusStorage(),
+        max_length=1000,
+        null=False,
+        help_text=_("File stored in S3"),
     )
 
     size = models.PositiveIntegerField(null=True, help_text=_("File size in bytes"))
@@ -226,10 +230,14 @@ class Chunk(BaseModel, Creatable, Updatable):
     name = models.CharField(max_length=1000, null=False, help_text=_("Chunk name"))
 
     parent = models.ForeignKey(
-        Queue, on_delete=models.CASCADE, related_name="chunks", help_text=_("Parent file of the chunk")
+        Queue, on_delete=models.CASCADE, null=False, related_name="chunks", help_text=_("Parent file of the chunk")
     )
     chunk = models.FileField(
-        upload_to=_get_parsed_path, storage=ErebusStorage(), null=False, help_text=_("File chunk stored in S3")
+        upload_to=_get_parsed_path,
+        storage=ErebusStorage(),
+        max_length=1000,
+        null=False,
+        help_text=_("File chunk stored in S3"),
     )
 
     response = models.TextField(null=True, blank=True, help_text=_("Raw response from AI service"))
@@ -246,16 +254,3 @@ class Chunk(BaseModel, Creatable, Updatable):
 
     def __str__(self):
         return self.name
-
-
-class QueueChunkThrough(models.Model):
-    queue = models.ForeignKey(Queue, on_delete=models.CASCADE)
-    chunk = models.ForeignKey(Chunk, on_delete=models.CASCADE)
-
-    class Meta:
-        unique_together = [
-            "queue",
-            "chunk",
-        ]
-        verbose_name = "Queue Chunk Through"
-        verbose_name_plural = "Queue Chunk Throughs"
