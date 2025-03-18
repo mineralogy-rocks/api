@@ -145,6 +145,9 @@ class MeasurementComponents(BaseModel):
 
 
 class Queue(BaseModel, Creatable, Updatable):
+    ALLOWED_EXTENSIONS = ["csv", "xls", "xlsx"]
+    MAX_SIZE_ALLOWED = 1024 * 1024 * 10
+
     STATUS_QUEUED = 0
     STATUS_PARSED = 1
     STATUS_PROCESSED = 2
@@ -188,6 +191,8 @@ class Queue(BaseModel, Creatable, Updatable):
         choices=STATUS_CHOICES, default=STATUS_QUEUED, null=False, help_text=_("Processing status")
     )
 
+    processed_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         verbose_name = "File Queue"
         verbose_name_plural = "File Queues"
@@ -200,10 +205,11 @@ class Queue(BaseModel, Creatable, Updatable):
         return self.file.url
 
     def save(self, *args, **kwargs):
+        try:
+            self.mime_type = mimetypes.guess_type(self.file.name)[0]
+        except Exception:
+            pass
         self.size = self.file.size
-        _mime_type = mimetypes.guess_type(self.file.name)
-        if _mime_type:
-            self.mime_type = _mime_type[0]
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):

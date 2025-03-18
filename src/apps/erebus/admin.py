@@ -2,11 +2,24 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
+from .forms import QueueForm
 from .models import Queue
+
+
+@admin.action(description="Mark as archived")
+def mark_archived(modeladmin, request, queryset):
+    queryset.update(status=Queue.STATUS_ARCHIVED)
+
+
+@admin.action(description="Schedule for processing")
+def schedule_processing(modeladmin, request, queryset):
+    queryset.update(status=Queue.STATUS_QUEUED)
 
 
 @admin.register(Queue)
 class QueueAdmin(admin.ModelAdmin):
+    form = QueueForm
+
     list_display = [
         "id",
         "name",
@@ -28,6 +41,12 @@ class QueueAdmin(admin.ModelAdmin):
         "mime_type",
         "created_at",
         "updated_at",
+        "processed_at",
+    ]
+
+    actions = [
+        schedule_processing,
+        mark_archived,
     ]
 
     def link(self, obj):

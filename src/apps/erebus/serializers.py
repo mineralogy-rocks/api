@@ -5,9 +5,12 @@ from .models import Queue
 
 
 class QueueCreateUpdateSerializer(serializers.ModelSerializer):
+    uuid = serializers.UUIDField(read_only=True)
+
     class Meta:
         model = Queue
         fields = [
+            "uuid",
             "name",
             "description",
             "status",
@@ -15,6 +18,19 @@ class QueueCreateUpdateSerializer(serializers.ModelSerializer):
             "size",
             "mime_type",
         ]
+
+    def validate_file(self, file):
+        if file.size > Queue.MAX_SIZE_ALLOWED:
+            raise serializers.ValidationError("File size exceeds 10MB limit")
+
+        import os
+
+        ext = os.path.splitext(file.name)[1][1:].lower()
+        if ext not in Queue.ALLOWED_EXTENSIONS:
+            raise serializers.ValidationError(
+                f"Unsupported file format. Allowed formats: {', '.join(Queue.ALLOWED_EXTENSIONS)}"
+            )
+        return file
 
     # @staticmethod
     # def _get_mime_type(file: UploadedFile) -> str:

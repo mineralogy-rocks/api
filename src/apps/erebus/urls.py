@@ -8,6 +8,7 @@ from . import views as views
 app_name = "erebus"
 router = DefaultRouter()
 
+router.register(r"queue", views.QueueViewSet, basename="queue")
 
 urlpatterns = [
     path("", include(router.urls)),

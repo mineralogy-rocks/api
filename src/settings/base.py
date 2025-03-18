@@ -28,6 +28,8 @@ SCHEMA = os.environ.get("DJANGO_SCHEMA")
 
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 3000
 
+DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

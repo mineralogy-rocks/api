@@ -2,7 +2,6 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
 from rest_framework import authentication
-from rest_framework import permissions
 from rest_framework import status
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -13,7 +12,6 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from .models import Chunk
 from .models import Queue
-from .permissions import IsOwnerPermission
 from .serializers import QueueCreateUpdateSerializer
 
 
@@ -24,9 +22,14 @@ class QueueViewSet(viewsets.ModelViewSet):
     serializer_class = QueueCreateUpdateSerializer
     parser_classes = [MultiPartParser, FormParser]
     permission_classes = [
-        permissions.IsAuthenticated,
-        IsOwnerPermission,
+        # permissions.IsAuthenticated,
+        # IsOwnerPermission,
     ]
+
+    def perform_create(self, serializer):
+        if self.request.user.is_authenticated:
+            serializer.save(user=self.request.user)
+        super().perform_create(serializer)
 
     @action(detail=True, methods=["post"])
     def upload(self, request, pk=None):
