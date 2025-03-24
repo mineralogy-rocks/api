@@ -185,6 +185,7 @@ USE_L10N = True
 
 USE_TZ = True
 
+ATOMIC_REQUESTS = True
 
 # Settings for REST Framework
 

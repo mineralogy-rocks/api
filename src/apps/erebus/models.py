@@ -191,7 +191,8 @@ class Queue(BaseModel, Creatable, Updatable):
         choices=STATUS_CHOICES, default=STATUS_QUEUED, null=False, help_text=_("Processing status")
     )
 
-    processed_at = models.DateTimeField(null=True, blank=True)
+    parsed_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of parsing completion"))
+    processed_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of processing completion"))
 
     class Meta:
         verbose_name = "File Queue"

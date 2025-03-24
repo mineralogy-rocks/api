@@ -27,6 +27,7 @@ class QueueAdmin(admin.ModelAdmin):
         "size_display",
         "mime_type",
         "status_display",
+        "chunks_nr_display",
         "link",
     ]
 
@@ -51,6 +52,9 @@ class QueueAdmin(admin.ModelAdmin):
 
     def link(self, obj):
         return format_html('<a href="{}" target="_blank">Download</a>', obj.get_absolute_url())
+
+    def chunks_nr_display(self, obj):
+        return obj.chunks.count()
 
     def size_display(self, obj):
         if obj.size:
