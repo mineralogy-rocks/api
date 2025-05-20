@@ -151,14 +151,18 @@ class Queue(BaseModel, Creatable, Updatable):
     STATUS_QUEUED = 0
     STATUS_PARSED = 1
     STATUS_PROCESSED = 2
-    STATUS_FAILED = 3
-    STATUS_ARCHIVED = 4
+
+    STATUS_PARSING_FAILED = 3
+    STATUS_PROCESSING_FAILED = 4
+
+    STATUS_ARCHIVED = 5
 
     STATUS_CHOICES = (
         (STATUS_QUEUED, _("Queued")),
         (STATUS_PARSED, _("Parsed")),
         (STATUS_PROCESSED, _("Processed")),
-        (STATUS_FAILED, _("Failed")),
+        (STATUS_PARSING_FAILED, _("Parsing Failed")),
+        (STATUS_PROCESSING_FAILED, _("Processing Failed")),
         (STATUS_ARCHIVED, _("Archived")),
     )
 
@@ -239,7 +243,7 @@ class Chunk(BaseModel, Creatable, Updatable):
     parent = models.ForeignKey(
         Queue, on_delete=models.CASCADE, null=False, related_name="chunks", help_text=_("Parent file of the chunk")
     )
-    chunk = models.FileField(
+    file = models.FileField(
         upload_to=_get_parsed_path,
         storage=ErebusStorage(),
         max_length=1000,
@@ -247,11 +251,7 @@ class Chunk(BaseModel, Creatable, Updatable):
         help_text=_("File chunk stored in S3"),
     )
 
-    response = models.TextField(null=True, blank=True, help_text=_("Raw response from AI service"))
-    clean_response = models.JSONField(null=True, blank=True, help_text=_("Parsed response from AI service"))
-
-    is_processed = models.BooleanField(default=False, help_text=_("Flag to indicate if processing is over"))
-    is_error = models.BooleanField(default=False, help_text=_("Flag to indicate if processing failed"))
+    version = models.IntegerField(default=1, help_text=_("Version of the chunk"))
 
     class Meta:
         verbose_name = "Chunk"
@@ -261,3 +261,57 @@ class Chunk(BaseModel, Creatable, Updatable):
 
     def __str__(self):
         return self.name
+
+
+class Prompt(BaseModel, Creatable):
+    EXTRACT_MEASUREMENTS = 0
+    EXTRACT_METADATA = 1
+
+    EXTRACT_CHOICES = (
+        (EXTRACT_MEASUREMENTS, _("Extract measurements")),
+        (EXTRACT_METADATA, _("Extract metadata")),
+    )
+
+    name = models.CharField(max_length=1000, null=False, help_text=_("Prompt name"))
+    prompt = models.TextField(null=False, help_text=_("Prompt text"))
+    type = models.IntegerField(choices=EXTRACT_CHOICES, null=False, help_text=_("Prompt type"))
+
+    class Meta:
+        verbose_name = "Prompt"
+        verbose_name_plural = "Prompts"
+        ordering = ["-created_at"]
+        get_latest_by = ["-created_at"]
+
+
+class ChunkResponse(BaseModel, Creatable, Updatable):
+    chunk = models.ForeignKey(Chunk, on_delete=models.CASCADE, null=False, related_name="responses")
+    prompt = models.ForeignKey(Prompt, on_delete=models.SET_NULL, null=False, related_name="responses")
+
+    response = models.TextField(null=True, blank=True, help_text=_("Raw response from AI service"))
+    clean_response = models.JSONField(null=True, blank=True, help_text=_("Parsed response from AI service"))
+
+    is_extracted = models.BooleanField(
+        default=False, help_text=_("Flag to indicate if structural data is extracted from the response to the database")
+    )
+    is_error = models.BooleanField(default=False, help_text=_("Flag to indicate if processing/extraction failed"))
+
+    exception = models.TextField(null=True, blank=True, help_text=_("Exception message"))
+
+    version = models.IntegerField(default=1, help_text=_("Version of the AI response"))
+
+    class Meta:
+        verbose_name = "Chunk"
+        verbose_name_plural = "Chunks"
+        ordering = ["-created_at", "-updated_at"]
+        get_latest_by = ["-created_at"]
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        _prev = ChunkResponse.objects.filter(chunk=self.chunk, prompt=self.prompt, is_processed=True).latest(
+            "created_at"
+        )
+        if _prev.exists():
+            self.version = _prev.version + 1
+        super().save(*args, **kwargs)

@@ -1,5 +1,5 @@
 # -*- coding: UTF-8 -*-
-from django.utils import timezone
+from django.db.models import Max
 from rest_framework import serializers
 
 from .models import Chunk
@@ -36,6 +36,8 @@ class QueueSerializer(serializers.ModelSerializer):
 
 
 class ChunkSerializer(serializers.ModelSerializer):
+    is_last = serializers.BooleanField(write_only=True)
+
     class Meta:
         model = Chunk
         fields = [
@@ -43,9 +45,21 @@ class ChunkSerializer(serializers.ModelSerializer):
             "file",
             "is_processed",
             "is_error",
+            "version",
         ]
 
     def create(self, validated_data):
-        queue = validated_data.get("queue")
-        queue.parsed_at = timezone.now()
-        return Chunk.objects.create(**validated_data)
+        queue = validated_data.pop("queue")
+        is_last = validated_data.pop("is_last")
+        data = {
+            "parent": queue,
+        }
+
+        if queue.chunks.exists() and queue.status == Queue.STATUS_PARSED:
+            data["version"] = queue.chunks.aggregate(max_version=Max("version"))["max_version"] + 1
+
+        chunk = Chunk.objects.create(**validated_data, **data)
+        if is_last:
+            queue.status = Queue.STATUS_PARSED
+            queue.save()
+        return chunk
