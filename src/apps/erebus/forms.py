@@ -9,7 +9,7 @@ class QueueForm(forms.ModelForm):
     class Meta:
         model = Queue
         fields = [
-            "user",
+            "owner",
             "name",
             "description",
             "file",

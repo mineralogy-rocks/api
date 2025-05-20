@@ -23,7 +23,7 @@ class QueueAdmin(admin.ModelAdmin):
     list_display = [
         "id",
         "name",
-        "user",
+        "owner",
         "size_display",
         "mime_type",
         "status_display",

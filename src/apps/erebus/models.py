@@ -150,31 +150,45 @@ class Queue(BaseModel, Creatable, Updatable):
 
     STATUS_QUEUED = 0
     STATUS_PARSED = 1
-    STATUS_PROCESSED = 2
+    STATUS_AI_GENERATED = 2
+    STATUS_PROCESSED = 3
 
     STATUS_PARSING_FAILED = 3
-    STATUS_PROCESSING_FAILED = 4
+    STATUS_AI_FAILED = 4
+    STATUS_PROCESSING_FAILED = 5
 
-    STATUS_ARCHIVED = 5
+    STATUS_ARCHIVED = 6
 
     STATUS_CHOICES = (
         (STATUS_QUEUED, _("Queued")),
         (STATUS_PARSED, _("Parsed")),
+        (STATUS_AI_GENERATED, _("AI Response(s) Generated")),
         (STATUS_PROCESSED, _("Processed")),
         (STATUS_PARSING_FAILED, _("Parsing Failed")),
+        (STATUS_AI_FAILED, _("AI Failed")),
         (STATUS_PROCESSING_FAILED, _("Processing Failed")),
         (STATUS_ARCHIVED, _("Archived")),
     )
 
+    ACCESS_FULL_PUBLIC = 0
+    ACCESS_SEMI_PUBLIC = 1
+    ACCESS_PRIVATE = 2
+
+    ACCESS_CHOICES = (
+        (ACCESS_FULL_PUBLIC, _("Full Public")),
+        (ACCESS_SEMI_PUBLIC, _("Semi Public")),
+        (ACCESS_PRIVATE, _("Private")),
+    )
+
     uuid = models.UUIDField(default=uuid.uuid4, unique=True)
 
-    user = models.ForeignKey(
+    owner = models.ForeignKey(
         get_user_model(),
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         default=None,
-        help_text=_("User who uploaded the file"),
+        help_text=_("Owner of the file"),
     )
 
     name = models.CharField(max_length=1000, null=False, help_text=_("File name"))
@@ -194,9 +208,14 @@ class Queue(BaseModel, Creatable, Updatable):
     status = models.IntegerField(
         choices=STATUS_CHOICES, default=STATUS_QUEUED, null=False, help_text=_("Processing status")
     )
+    access = models.IntegerField(
+        choices=ACCESS_CHOICES, default=ACCESS_FULL_PUBLIC, null=False, help_text=_("Access level")
+    )
 
     parsed_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of parsing completion"))
+    ai_generated_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of AI response generation"))
     processed_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of processing completion"))
+    archived_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of archiving"))
 
     class Meta:
         verbose_name = "File Queue"
@@ -228,13 +247,10 @@ class Queue(BaseModel, Creatable, Updatable):
 
     @property
     def get_parsed_url(self):
-        if self.status in [self.STATUS_PROCESSED, self.STATUS_PARSED]:
-            return default_storage.url(f"{self.uuid}/parsed/")
+        if self.status in [self.STATUS_PROCESSED, self.STATUS_PARSED] and self.chunks.exists():
+            _max_version = self.chunks.aggregate(ver=models.Max("version"))["ver"]
+            return default_storage.url(f"{self.uuid}/{_max_version}/parsed/")
         return None
-
-    @property
-    def get_chunks(self):
-        return self.chunks.filter(is_processed=False)
 
 
 class Chunk(BaseModel, Creatable, Updatable):
@@ -264,15 +280,15 @@ class Chunk(BaseModel, Creatable, Updatable):
 
 
 class Prompt(BaseModel, Creatable):
-    EXTRACT_MEASUREMENTS = 0
+    EXTRACT_NUMERICAL = 0
     EXTRACT_METADATA = 1
 
     EXTRACT_CHOICES = (
-        (EXTRACT_MEASUREMENTS, _("Extract measurements")),
+        (EXTRACT_NUMERICAL, _("Extract numerical data")),
         (EXTRACT_METADATA, _("Extract metadata")),
     )
 
-    name = models.CharField(max_length=1000, null=False, help_text=_("Prompt name"))
+    version = models.IntegerField(default=1, help_text=_("Version of the prompt"))
     prompt = models.TextField(null=False, help_text=_("Prompt text"))
     type = models.IntegerField(choices=EXTRACT_CHOICES, null=False, help_text=_("Prompt type"))
 
@@ -285,9 +301,9 @@ class Prompt(BaseModel, Creatable):
 
 class ChunkResponse(BaseModel, Creatable, Updatable):
     chunk = models.ForeignKey(Chunk, on_delete=models.CASCADE, null=False, related_name="responses")
-    prompt = models.ForeignKey(Prompt, on_delete=models.SET_NULL, null=False, related_name="responses")
+    prompt = models.ForeignKey(Prompt, on_delete=models.SET_NULL, null=True, related_name="responses")
 
-    response = models.TextField(null=True, blank=True, help_text=_("Raw response from AI service"))
+    response = models.TextField(null=True, blank=True, help_text=_("Raw response(s) from AI service"))
     clean_response = models.JSONField(null=True, blank=True, help_text=_("Parsed response from AI service"))
 
     is_extracted = models.BooleanField(
@@ -297,8 +313,6 @@ class ChunkResponse(BaseModel, Creatable, Updatable):
 
     exception = models.TextField(null=True, blank=True, help_text=_("Exception message"))
 
-    version = models.IntegerField(default=1, help_text=_("Version of the AI response"))
-
     class Meta:
         verbose_name = "Chunk"
         verbose_name_plural = "Chunks"
@@ -307,11 +321,3 @@ class ChunkResponse(BaseModel, Creatable, Updatable):
 
     def __str__(self):
         return self.name
-
-    def save(self, *args, **kwargs):
-        _prev = ChunkResponse.objects.filter(chunk=self.chunk, prompt=self.prompt, is_processed=True).latest(
-            "created_at"
-        )
-        if _prev.exists():
-            self.version = _prev.version + 1
-        super().save(*args, **kwargs)
