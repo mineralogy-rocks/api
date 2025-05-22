@@ -33,7 +33,7 @@ class QueueViewSet(viewsets.ModelViewSet):
     filterset_class = QueueFilter
 
     def get_serializer_class(self):
-        if action in ["add_chunk"]:
+        if self.action in ["add_chunk"]:
             return ChunkSerializer
         return super().get_serializer_class()
 
@@ -50,7 +50,13 @@ class QueueViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="add-chunk")
     def add_chunk(self, request, uuid=None):
+        queue = self.get_object()
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        chunk = serializer.save()
+
+        if queue.status == Queue.STATUS_PARSED:
+            queue.status = Queue.STATUS_QUEUED
+            queue.save()
+
+        chunk = serializer.save(parent=queue)
         return Response(ChunkSerializer(chunk).data, status=status.HTTP_201_CREATED)

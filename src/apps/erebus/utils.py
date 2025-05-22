@@ -21,4 +21,4 @@ def _get_upload_path(instance, filename):
 
 
 def _get_parsed_path(instance, filename):
-    return f"{instance.uuid}/parsed/v{instance.version}/{filename}"
+    return f"{instance.parent.uuid}/parsed/v{instance.version}/{filename}"

@@ -1,13 +1,45 @@
 # -*- coding: UTF-8 -*-
 from django.db.models import Max
+from django.utils import timezone
 from rest_framework import serializers
 
 from .models import Chunk
 from .models import Queue
 
 
+class ChunkSerializer(serializers.ModelSerializer):
+    is_last = serializers.BooleanField(write_only=True)
+
+    class Meta:
+        model = Chunk
+        fields = [
+            "name",
+            "file",
+            "version",
+            "is_last",
+        ]
+
+    def create(self, validated_data):
+        parent = validated_data.pop("parent")
+        is_last = validated_data.pop("is_last")
+        data = {
+            "parent": parent,
+        }
+
+        if parent.chunks.exists() and parent.status == Queue.STATUS_PARSED:
+            data["version"] = parent.chunks.aggregate(max_version=Max("version"))["max_version"] + 1
+
+        chunk = Chunk.objects.create(**validated_data, **data)
+        if is_last:
+            parent.status = Queue.STATUS_PARSED
+            parent.parsed_at = timezone.now()
+            parent.save()
+        return chunk
+
+
 class QueueSerializer(serializers.ModelSerializer):
     uuid = serializers.UUIDField(read_only=True)
+    chunks = ChunkSerializer(many=True, read_only=True)
 
     class Meta:
         model = Queue
@@ -19,6 +51,7 @@ class QueueSerializer(serializers.ModelSerializer):
             "file",
             "size",
             "mime_type",
+            "chunks",
         ]
 
     def validate_file(self, file):
@@ -33,33 +66,3 @@ class QueueSerializer(serializers.ModelSerializer):
                 f"Unsupported file format. Allowed formats: {', '.join(Queue.ALLOWED_EXTENSIONS)}"
             )
         return file
-
-
-class ChunkSerializer(serializers.ModelSerializer):
-    is_last = serializers.BooleanField(write_only=True)
-
-    class Meta:
-        model = Chunk
-        fields = [
-            "name",
-            "file",
-            "is_processed",
-            "is_error",
-            "version",
-        ]
-
-    def create(self, validated_data):
-        queue = validated_data.pop("queue")
-        is_last = validated_data.pop("is_last")
-        data = {
-            "parent": queue,
-        }
-
-        if queue.chunks.exists() and queue.status == Queue.STATUS_PARSED:
-            data["version"] = queue.chunks.aggregate(max_version=Max("version"))["max_version"] + 1
-
-        chunk = Chunk.objects.create(**validated_data, **data)
-        if is_last:
-            queue.status = Queue.STATUS_PARSED
-            queue.save()
-        return chunk

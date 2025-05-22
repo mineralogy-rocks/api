@@ -253,7 +253,7 @@ class Queue(BaseModel, Creatable, Updatable):
         return None
 
 
-class Chunk(BaseModel, Creatable, Updatable):
+class Chunk(BaseModel, Creatable):
     name = models.CharField(max_length=1000, null=False, help_text=_("Chunk name"))
 
     parent = models.ForeignKey(
@@ -272,7 +272,7 @@ class Chunk(BaseModel, Creatable, Updatable):
     class Meta:
         verbose_name = "Chunk"
         verbose_name_plural = "Chunks"
-        ordering = ["-created_at", "-updated_at"]
+        ordering = ["-created_at"]
         get_latest_by = ["-created_at"]
 
     def __str__(self):
