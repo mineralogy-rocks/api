@@ -11,7 +11,9 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from .filters import QueueFilter
+from .models import Chunk
 from .models import Queue
+from .serializers import ChunkIssueSerializer
 from .serializers import ChunkSerializer
 from .serializers import QueueSerializer
 
@@ -35,6 +37,8 @@ class QueueViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action in ["add_chunk"]:
             return ChunkSerializer
+        elif self.action in ["add_issue"]:
+            return ChunkIssueSerializer
         return super().get_serializer_class()
 
     def perform_create(self, serializer):
@@ -50,13 +54,36 @@ class QueueViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="add-chunk")
     def add_chunk(self, request, uuid=None):
+        try:
+            queue = self.get_object()
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            chunk = serializer.save(parent=queue)
+            return Response(ChunkSerializer(chunk).data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            print(e)
+            raise
+
+    @action(detail=True, methods=["get"], url_path=r"(?P<chunk_id>\d+)")
+    def get_chunk(self, request, uuid=None, chunk_id=None):
         queue = self.get_object()
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        try:
+            chunk = queue.chunks.get(id=chunk_id)
+            serializer = ChunkSerializer(chunk)
+            return Response(serializer.data)
+        except Chunk.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
 
-        if queue.status == Queue.STATUS_PARSED:
-            queue.status = Queue.STATUS_QUEUED
-            queue.save()
+    @action(detail=True, methods=["post"], url_path=r"(?P<chunk_id>\d+)/add-issue")
+    def add_issue(self, request, uuid=None, chunk_id=None):
+        queue = self.get_object()
+        try:
+            chunk = queue.chunks.get(id=chunk_id)
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
 
-        chunk = serializer.save(parent=queue)
-        return Response(ChunkSerializer(chunk).data, status=status.HTTP_201_CREATED)
+            issue = serializer.save(chunk=chunk)
+            return Response(ChunkIssueSerializer(issue).data, status=status.HTTP_201_CREATED)
+        except Chunk.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)

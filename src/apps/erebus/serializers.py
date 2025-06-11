@@ -4,11 +4,30 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from .models import Chunk
+from .models import ChunkIssue
+from .models import CodeVersion
 from .models import Queue
+
+
+class CodeVersionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CodeVersion
+        fields = [
+            "id",
+            "name",
+        ]
+
+    def to_internal_value(self, data):
+        print(data)
+        try:
+            return self.Meta.model.objects.get(name=data["name"])
+        except self.Meta.model.DoesNotExist:
+            return self.Meta.model.objects.create(name=data["name"])
 
 
 class ChunkSerializer(serializers.ModelSerializer):
     is_last = serializers.BooleanField(write_only=True)
+    code_version = CodeVersionSerializer()
 
     class Meta:
         model = Chunk
@@ -16,6 +35,7 @@ class ChunkSerializer(serializers.ModelSerializer):
             "name",
             "file",
             "version",
+            "code_version",
             "is_last",
         ]
 
@@ -26,7 +46,7 @@ class ChunkSerializer(serializers.ModelSerializer):
             "parent": parent,
         }
 
-        if parent.chunks.exists() and parent.status == Queue.STATUS_PARSED:
+        if parent.chunks.exists() and parent.status in [Queue.STATUS_PARSING_FAILED]:
             data["version"] = parent.chunks.aggregate(max_version=Max("version"))["max_version"] + 1
 
         chunk = Chunk.objects.create(**validated_data, **data)
@@ -39,6 +59,7 @@ class ChunkSerializer(serializers.ModelSerializer):
 
 class QueueSerializer(serializers.ModelSerializer):
     uuid = serializers.UUIDField(read_only=True)
+    parsing_version = serializers.IntegerField(read_only=True, default=0)
     chunks = ChunkSerializer(many=True, read_only=True)
 
     class Meta:
@@ -51,6 +72,7 @@ class QueueSerializer(serializers.ModelSerializer):
             "file",
             "size",
             "mime_type",
+            "parsing_version",
             "chunks",
         ]
 
@@ -66,3 +88,24 @@ class QueueSerializer(serializers.ModelSerializer):
                 f"Unsupported file format. Allowed formats: {', '.join(Queue.ALLOWED_EXTENSIONS)}"
             )
         return file
+
+
+class ChunkIssueSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChunkIssue
+        fields = [
+            "id",
+            "name",
+            "comment",
+        ]
+
+    def create(self, validated_data):
+        chunk = validated_data.pop("chunk")
+        user = validated_data.pop("user", None)
+
+        data = {
+            "chunk": chunk,
+            "email": user.email if user else None,
+        }
+
+        return ChunkIssue.objects.create(**validated_data, **data)

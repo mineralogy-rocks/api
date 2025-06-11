@@ -145,6 +145,8 @@ class MeasurementComponents(BaseModel):
 
 
 class Queue(BaseModel, Creatable, Updatable):
+    # TODO: add project/space field
+
     ALLOWED_EXTENSIONS = ["csv", "xls", "xlsx"]
     MAX_SIZE_ALLOWED = 1024 * 1024 * 10
 
@@ -252,6 +254,22 @@ class Queue(BaseModel, Creatable, Updatable):
             return default_storage.url(f"{self.uuid}/{_max_version}/parsed/")
         return None
 
+    @property
+    def parsing_version(self):
+        if self.chunks:
+            return self.chunks.order_by("-version").first().version
+        return 0
+
+
+class CodeVersion(BaseModel, Creatable):
+    name = models.CharField(max_length=100, null=False, help_text=_("version name"))
+
+    class Meta:
+        verbose_name = "Code Version"
+        verbose_name_plural = "Code Versions"
+        ordering = ["-created_at"]
+        get_latest_by = ["-created_at"]
+
 
 class Chunk(BaseModel, Creatable):
     name = models.CharField(max_length=1000, null=False, help_text=_("Chunk name"))
@@ -267,7 +285,13 @@ class Chunk(BaseModel, Creatable):
         help_text=_("File chunk stored in S3"),
     )
 
+    code_version = models.ForeignKey(
+        CodeVersion, on_delete=models.SET_NULL, null=True, help_text=_("Code version used for processing")
+    )
     version = models.IntegerField(default=1, help_text=_("Version of the chunk"))
+    is_approved = models.BooleanField(
+        default=False, help_text=_("Flag to indicate if the chunk should be used for further processing")
+    )
 
     class Meta:
         verbose_name = "Chunk"
@@ -277,6 +301,31 @@ class Chunk(BaseModel, Creatable):
 
     def __str__(self):
         return self.name
+
+
+class ChunkIssue(BaseModel, Creatable):
+    chunk = models.ForeignKey(Chunk, on_delete=models.CASCADE, null=False, related_name="issues")
+
+    name = models.CharField(max_length=100, null=False, help_text=_("Issue name"))
+    comment = models.TextField(null=False, help_text=_("Description"))
+
+    email = models.EmailField(null=False, help_text=_("Email address of the reporter"))
+    user = models.ForeignKey(
+        get_user_model(),
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        default=None,
+        help_text=_("User who reported the issue"),
+    )
+
+    is_resolved = models.BooleanField(default=False, help_text=_("Flag to indicate if the issue has been resolved"))
+
+    class Meta:
+        verbose_name = "Chunk Issue"
+        verbose_name_plural = "Chunk Issues"
+        ordering = ["-created_at"]
+        get_latest_by = ["-created_at"]
 
 
 class Prompt(BaseModel, Creatable):
