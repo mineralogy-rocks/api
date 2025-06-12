@@ -262,7 +262,7 @@ class Queue(BaseModel, Creatable, Updatable):
 
 
 class CodeVersion(BaseModel, Creatable):
-    name = models.CharField(max_length=100, null=False, help_text=_("version name"))
+    name = models.CharField(max_length=100, null=False, unique=True, help_text=_("version name"))
 
     class Meta:
         verbose_name = "Code Version"

@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from .filters import QueueFilter
+from .mixins import CodeVersionMixin
 from .models import Chunk
 from .models import Queue
 from .serializers import ChunkIssueSerializer
@@ -18,7 +19,7 @@ from .serializers import ChunkSerializer
 from .serializers import QueueSerializer
 
 
-class QueueViewSet(viewsets.ModelViewSet):
+class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
     http_method_names = ["get", "post", "put", "patch", "delete"]
     authentication_classes = [authentication.SessionAuthentication, JWTAuthentication]
     queryset = Queue.objects.all()
@@ -56,7 +57,11 @@ class QueueViewSet(viewsets.ModelViewSet):
     def add_chunk(self, request, uuid=None):
         try:
             queue = self.get_object()
-            serializer = self.get_serializer(data=request.data)
+            _data = request.data.copy()
+            code_version = self.generate_code_version()
+            if code_version:
+                _data["code_version"] = code_version.id
+            serializer = self.get_serializer(data=_data)
             serializer.is_valid(raise_exception=True)
 
             chunk = serializer.save(parent=queue)

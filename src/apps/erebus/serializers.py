@@ -9,25 +9,11 @@ from .models import CodeVersion
 from .models import Queue
 
 
-class CodeVersionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CodeVersion
-        fields = [
-            "id",
-            "name",
-        ]
-
-    def to_internal_value(self, data):
-        print(data)
-        try:
-            return self.Meta.model.objects.get(name=data["name"])
-        except self.Meta.model.DoesNotExist:
-            return self.Meta.model.objects.create(name=data["name"])
-
-
 class ChunkSerializer(serializers.ModelSerializer):
     is_last = serializers.BooleanField(write_only=True)
-    code_version = CodeVersionSerializer()
+    code_version = serializers.PrimaryKeyRelatedField(
+        queryset=CodeVersion.objects.all(), required=False, allow_null=True
+    )
 
     class Meta:
         model = Chunk
