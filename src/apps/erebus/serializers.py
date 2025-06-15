@@ -1,5 +1,4 @@
 # -*- coding: UTF-8 -*-
-from django.db.models import Max
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -10,10 +9,10 @@ from .models import Queue
 
 
 class ChunkSerializer(serializers.ModelSerializer):
-    is_last = serializers.BooleanField(write_only=True)
     code_version = serializers.PrimaryKeyRelatedField(
         queryset=CodeVersion.objects.all(), required=False, allow_null=True
     )
+    status = serializers.ChoiceField(choices=Queue.STATUS_CHOICES, write_only=True, required=False)
 
     class Meta:
         model = Chunk
@@ -22,24 +21,26 @@ class ChunkSerializer(serializers.ModelSerializer):
             "file",
             "version",
             "code_version",
-            "is_last",
+            "status",
         ]
 
     def create(self, validated_data):
         parent = validated_data.pop("parent")
-        is_last = validated_data.pop("is_last")
+        status = validated_data.pop("status", None)
         data = {
             "parent": parent,
         }
 
-        if parent.chunks.exists() and parent.status in [Queue.STATUS_PARSING_FAILED]:
-            data["version"] = parent.chunks.aggregate(max_version=Max("version"))["max_version"] + 1
-
         chunk = Chunk.objects.create(**validated_data, **data)
-        if is_last:
-            parent.status = Queue.STATUS_PARSED
-            parent.parsed_at = timezone.now()
+
+        if status:
+            parent.status = status
+
+            if status in [Queue.STATUS_PARSED]:
+                parent.parsed_at = timezone.now()
+
             parent.save()
+
         return chunk
 
 
