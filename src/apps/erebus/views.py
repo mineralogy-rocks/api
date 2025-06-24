@@ -35,6 +35,15 @@ class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
 
     filterset_class = QueueFilter
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        serializer_class = self.get_serializer_class()
+        if hasattr(serializer_class, "setup_eager_loading"):
+            queryset = serializer_class.setup_eager_loading(queryset=queryset, request=self.request)
+
+        return queryset
+
     def get_serializer_class(self):
         if self.action in ["add_chunk"]:
             return ChunkSerializer
@@ -55,20 +64,16 @@ class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="add-chunk")
     def add_chunk(self, request, uuid=None):
-        try:
-            queue = self.get_object()
-            _data = request.data.copy()
-            code_version = self.generate_code_version()
-            if code_version:
-                _data["code_version"] = code_version.id
-            serializer = self.get_serializer(data=_data)
-            serializer.is_valid(raise_exception=True)
+        queue = self.get_object()
+        _data = request.data.copy()
+        code_version = self.generate_code_version()
+        if code_version:
+            _data["code_version"] = code_version.id
+        serializer = self.get_serializer(data=_data)
+        serializer.is_valid(raise_exception=True)
 
-            chunk = serializer.save(parent=queue)
-            return Response(ChunkSerializer(chunk).data, status=status.HTTP_201_CREATED)
-        except Exception as e:
-            print(e)
-            raise
+        chunk = serializer.save(parent=queue)
+        return Response(ChunkSerializer(chunk).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["get"], url_path=r"(?P<chunk_id>\d+)")
     def get_chunk(self, request, uuid=None, chunk_id=None):

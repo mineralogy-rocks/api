@@ -76,6 +76,18 @@ class QueueSerializer(serializers.ModelSerializer):
             )
         return file
 
+    @staticmethod
+    def setup_eager_loading(**kwargs):
+        queryset = kwargs.get("queryset")
+
+        select_related = []
+        prefetch_related = [
+            "chunks__code_version",
+        ]
+
+        queryset = queryset.select_related(*select_related).prefetch_related(*prefetch_related)
+        return queryset
+
 
 class ChunkIssueSerializer(serializers.ModelSerializer):
     class Meta:

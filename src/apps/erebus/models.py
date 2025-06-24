@@ -155,11 +155,11 @@ class Queue(BaseModel, Creatable, Updatable):
     STATUS_AI_GENERATED = 2
     STATUS_PROCESSED = 3
 
-    STATUS_PARSING_FAILED = 3
-    STATUS_AI_FAILED = 4
-    STATUS_PROCESSING_FAILED = 5
+    STATUS_PARSING_FAILED = 4
+    STATUS_AI_FAILED = 5
+    STATUS_PROCESSING_FAILED = 6
 
-    STATUS_ARCHIVED = 6
+    STATUS_ARCHIVED = 7
 
     STATUS_CHOICES = (
         (STATUS_QUEUED, _("Queued")),
@@ -262,13 +262,27 @@ class Queue(BaseModel, Creatable, Updatable):
 
 
 class CodeVersion(BaseModel, Creatable):
-    name = models.CharField(max_length=100, null=False, unique=True, help_text=_("version name"))
+    major = models.PositiveIntegerField()
+    minor = models.PositiveIntegerField()
+    patch = models.PositiveIntegerField()
 
     class Meta:
         verbose_name = "Code Version"
         verbose_name_plural = "Code Versions"
-        ordering = ["-created_at"]
         get_latest_by = ["-created_at"]
+        unique_together = ("major", "minor", "patch")
+        ordering = ["-major", "-minor", "-patch"]
+
+    @property
+    def version(self):
+        return f"{self.major}.{self.minor}.{self.patch}"
+
+    @version.setter
+    def version(self, value):
+        major, minor, patch = value.split(".")
+        self.major = major
+        self.minor = minor
+        self.patch = patch
 
 
 class Chunk(BaseModel, Creatable):
