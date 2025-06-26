@@ -2,6 +2,7 @@
 from django import forms
 from django.core.validators import FileExtensionValidator
 
+from .models import Prompt
 from .models import Queue
 
 
@@ -26,3 +27,12 @@ class QueueForm(forms.ModelForm):
 
         FileExtensionValidator(allowed_extensions=Queue.ALLOWED_EXTENSIONS)
         return file
+
+
+class PromptForm(forms.ModelForm):
+    class Meta:
+        model = Prompt
+        fields = ["text", "type"]
+        widgets = {
+            "text": forms.Textarea(attrs={"rows": 40, "cols": 120, "style": "width: 70%;"}),
+        }

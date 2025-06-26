@@ -10,6 +10,7 @@ from core.models.mineral import Mineral
 from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from .utils import ErebusStorage
@@ -262,9 +263,9 @@ class Queue(BaseModel, Creatable, Updatable):
 
 
 class CodeVersion(BaseModel, Creatable):
-    major = models.PositiveIntegerField()
-    minor = models.PositiveIntegerField()
-    patch = models.PositiveIntegerField()
+    major = models.PositiveIntegerField(null=True)
+    minor = models.PositiveIntegerField(null=True)
+    patch = models.PositiveIntegerField(null=True)
 
     class Meta:
         verbose_name = "Code Version"
@@ -334,6 +335,7 @@ class ChunkIssue(BaseModel, Creatable):
     )
 
     is_resolved = models.BooleanField(default=False, help_text=_("Flag to indicate if the issue has been resolved"))
+    resolved_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of resolution"))
 
     class Meta:
         verbose_name = "Chunk Issue"
@@ -341,19 +343,19 @@ class ChunkIssue(BaseModel, Creatable):
         ordering = ["-created_at"]
         get_latest_by = ["-created_at"]
 
+    def save(self, *args, **kwargs):
+        if self.is_resolved:
+            self.resolved_at = timezone.now()
+        super().save(*args, **kwargs)
+
 
 class Prompt(BaseModel, Creatable):
-    EXTRACT_NUMERICAL = 0
-    EXTRACT_METADATA = 1
+    PROMPT_COMPOSITION = 1
 
-    EXTRACT_CHOICES = (
-        (EXTRACT_NUMERICAL, _("Extract numerical data")),
-        (EXTRACT_METADATA, _("Extract metadata")),
-    )
+    PROMPT_CHOICES = ((PROMPT_COMPOSITION, _("Prompt for composition extraction")),)
 
-    version = models.IntegerField(default=1, help_text=_("Version of the prompt"))
-    prompt = models.TextField(null=False, help_text=_("Prompt text"))
-    type = models.IntegerField(choices=EXTRACT_CHOICES, null=False, help_text=_("Prompt type"))
+    text = models.TextField(blank=True, null=True, help_text=_("Prompt text"))
+    type = models.IntegerField(choices=PROMPT_CHOICES, null=False, help_text=_("Prompt type"))
 
     class Meta:
         verbose_name = "Prompt"
@@ -377,8 +379,8 @@ class ChunkResponse(BaseModel, Creatable, Updatable):
     exception = models.TextField(null=True, blank=True, help_text=_("Exception message"))
 
     class Meta:
-        verbose_name = "Chunk"
-        verbose_name_plural = "Chunks"
+        verbose_name = "Chunk Response"
+        verbose_name_plural = "Chunk Responses"
         ordering = ["-created_at", "-updated_at"]
         get_latest_by = ["-created_at"]
 

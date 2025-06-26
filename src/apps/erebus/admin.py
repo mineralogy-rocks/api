@@ -1,8 +1,16 @@
 # -*- coding: UTF-8 -*-
+import json
+
 from django.contrib import admin
 from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 
+from .forms import PromptForm
 from .forms import QueueForm
+from .models import Chunk
+from .models import ChunkIssue
+from .models import ChunkResponse
+from .models import Prompt
 from .models import Queue
 
 
@@ -16,9 +24,30 @@ def schedule_processing(modeladmin, request, queryset):
     queryset.update(status=Queue.STATUS_QUEUED)
 
 
+class ChunkInline(admin.TabularInline):
+    model = Chunk
+    extra = 0
+    fields = ["name", "version", "is_approved", "created_at", "responses_count", "link"]
+    readonly_fields = ["name", "version", "created_at", "responses_count", "link"]
+    can_delete = False
+    show_change_link = True
+
+    def responses_count(self, obj):
+        return obj.responses.count()
+
+    def link(self, obj):
+        if obj.file:
+            return format_html('<a href="{}" target="_blank">Download</a>', obj.file.url)
+        return "-"
+
+    responses_count.short_description = "Responses"
+    link.short_description = "Download"
+
+
 @admin.register(Queue)
 class QueueAdmin(admin.ModelAdmin):
     form = QueueForm
+    inlines = [ChunkInline]
 
     list_display = [
         "id",
@@ -32,7 +61,7 @@ class QueueAdmin(admin.ModelAdmin):
     ]
 
     list_display_links = [
-        "id",
+        "name",
     ]
 
     readonly_fields = [
@@ -72,7 +101,7 @@ class QueueAdmin(admin.ModelAdmin):
             Queue.STATUS_QUEUED: "#FFA500",
             Queue.STATUS_PARSED: "#1E90FF",
             Queue.STATUS_PROCESSED: "#32CD32",
-            Queue.STATUS_FAILED: "#FF0000",
+            Queue.STATUS_PARSING_FAILED: "#FF0000",
             Queue.STATUS_ARCHIVED: "#808080",
         }
 
@@ -81,3 +110,203 @@ class QueueAdmin(admin.ModelAdmin):
 
     status_display.short_description = "Status"
     size_display.short_description = "Size (human-friendly)"
+
+
+@admin.action(description="Mark as approved")
+def mark_approved(modeladmin, request, queryset):
+    queryset.update(is_approved=True)
+
+
+@admin.action(description="Mark as not approved")
+def mark_not_approved(modeladmin, request, queryset):
+    queryset.update(is_approved=False)
+
+
+@admin.register(Chunk)
+class ChunkAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "name",
+        "parent",
+        "version",
+        "is_approved",
+        "_code_version",
+        "created_at",
+        "responses_count",
+        "link",
+    ]
+
+    list_display_links = [
+        "name",
+    ]
+
+    list_filter = [
+        "is_approved",
+        "version",
+        "parent",
+    ]
+
+    search_fields = [
+        "name",
+        "parent__name",
+    ]
+
+    readonly_fields = [
+        "created_at",
+        "_code_version",
+    ]
+
+    actions = [
+        mark_approved,
+        mark_not_approved,
+    ]
+
+    def _code_version(self, obj):
+        return obj.code_version.version if obj.code_version else None
+
+    def link(self, obj):
+        return format_html('<a href="{}" target="_blank">Download</a>', obj.file.url)
+
+    def responses_count(self, obj):
+        return obj.responses.count()
+
+    _code_version.short_description = "Code version"
+    responses_count.short_description = "Responses"
+
+
+@admin.action(description="Mark as resolved")
+def mark_resolved(modeladmin, request, queryset):
+    queryset.update(is_resolved=True)
+
+
+@admin.action(description="Mark as unresolved")
+def mark_unresolved(modeladmin, request, queryset):
+    queryset.update(is_resolved=False)
+
+
+@admin.register(ChunkIssue)
+class ChunkIssueAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "name",
+        "chunk",
+        "email",
+        "user",
+        "is_resolved",
+        "created_at",
+        "resolved_at",
+    ]
+
+    list_display_links = [
+        "name",
+    ]
+
+    list_filter = [
+        "is_resolved",
+        "chunk",
+        "user",
+    ]
+
+    search_fields = [
+        "name",
+        "comment",
+        "email",
+        "chunk__name",
+    ]
+
+    readonly_fields = [
+        "created_at",
+        "resolved_at",
+    ]
+
+    actions = [
+        mark_resolved,
+        mark_unresolved,
+    ]
+
+
+@admin.register(Prompt)
+class PromptAdmin(admin.ModelAdmin):
+    form = PromptForm
+    list_display = [
+        "id",
+        "type",
+        "text_preview",
+        "created_at",
+    ]
+
+    list_filter = [
+        "type",
+    ]
+
+    search_fields = [
+        "text",
+    ]
+
+    readonly_fields = [
+        "created_at",
+    ]
+
+    def text_preview(self, obj):
+        if obj.text:
+            return obj.text[:100] + "..." if len(obj.text) > 100 else obj.text
+        return "-"
+
+    text_preview.short_description = "Text Preview"
+
+
+@admin.register(ChunkResponse)
+class ChunkResponseAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "chunk",
+        "prompt",
+        "is_extracted",
+        "is_error",
+        "response_preview",
+        "exception_preview",
+        "created_at",
+        "updated_at",
+    ]
+
+    list_filter = [
+        "is_extracted",
+        "is_error",
+        "chunk",
+        "prompt",
+    ]
+
+    search_fields = [
+        "chunk__name",
+        "response",
+        "exception",
+    ]
+
+    readonly_fields = [
+        "created_at",
+        "updated_at",
+        "formatted_clean_response",
+    ]
+
+    def response_preview(self, obj):
+        if obj.response:
+            return obj.response[:100] + "..." if len(obj.response) > 100 else obj.response
+        return "-"
+
+    def exception_preview(self, obj):
+        if obj.exception:
+            return obj.exception[:100] + "..." if len(obj.exception) > 100 else obj.exception
+        return "-"
+
+    def formatted_clean_response(self, obj):
+        if obj.clean_response:
+            try:
+                formatted_json = json.dumps(obj.clean_response, indent=4)
+                return mark_safe(f"<pre>{formatted_json}</pre>")
+            except Exception as e:
+                return f"Error formatting JSON: {str(e)}"
+        return "-"
+
+    response_preview.short_description = "Response Preview"
+    exception_preview.short_description = "Exception Preview"
+    formatted_clean_response.short_description = "Formatted Clean Response"

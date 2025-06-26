@@ -15,5 +15,6 @@ class CodeVersionMixin(object):
     def generate_code_version(self):
         if not self.request._code_version:
             return None
-        version, created = CodeVersion.objects.get_or_create(name=self.request._code_version)
+        major, minor, patch = self.request._code_version.split(".")
+        version, created = CodeVersion.objects.get_or_create(major=major, minor=minor, patch=patch)
         return version
