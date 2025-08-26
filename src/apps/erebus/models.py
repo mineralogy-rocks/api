@@ -350,9 +350,13 @@ class ChunkIssue(BaseModel, Creatable):
 
 
 class Prompt(BaseModel, Creatable):
-    PROMPT_COMPOSITION = 1
+    PROMPT_COMPOSITION = 0
+    PROMPT_METADATA = 1
 
-    PROMPT_CHOICES = ((PROMPT_COMPOSITION, _("Prompt for composition extraction")),)
+    PROMPT_CHOICES = (
+        (PROMPT_COMPOSITION, _("Prompt for composition extraction")),
+        (PROMPT_METADATA, _("Prompt for metadata extraction")),
+    )
 
     text = models.TextField(blank=True, null=True, help_text=_("Prompt text"))
     type = models.IntegerField(choices=PROMPT_CHOICES, null=False, help_text=_("Prompt type"))

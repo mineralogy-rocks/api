@@ -4,7 +4,9 @@ from rest_framework import serializers
 
 from .models import Chunk
 from .models import ChunkIssue
+from .models import ChunkResponse
 from .models import CodeVersion
+from .models import Prompt
 from .models import Queue
 
 
@@ -108,3 +110,35 @@ class ChunkIssueSerializer(serializers.ModelSerializer):
         }
 
         return ChunkIssue.objects.create(**validated_data, **data)
+
+
+class ChunkResponseSerializer(serializers.ModelSerializer):
+    prompt = serializers.PrimaryKeyRelatedField(queryset=Prompt.objects.all(), required=False, allow_null=True)
+
+    class Meta:
+        model = ChunkResponse
+        fields = [
+            "id",
+            "response",
+            "clean_response",
+            "prompt",
+            "is_extracted",
+            "is_error",
+            "exception",
+        ]
+
+    def create(self, validated_data):
+        chunk = validated_data.pop("chunk")
+
+        return ChunkResponse.objects.create(chunk=chunk, **validated_data)
+
+
+class PromptSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Prompt
+        fields = [
+            "id",
+            "text",
+            "type",
+            "created_at",
+        ]

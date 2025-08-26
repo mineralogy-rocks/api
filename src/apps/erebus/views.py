@@ -13,9 +13,12 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from .filters import QueueFilter
 from .mixins import CodeVersionMixin
 from .models import Chunk
+from .models import Prompt
 from .models import Queue
 from .serializers import ChunkIssueSerializer
+from .serializers import ChunkResponseSerializer
 from .serializers import ChunkSerializer
+from .serializers import PromptSerializer
 from .serializers import QueueSerializer
 
 
@@ -27,7 +30,7 @@ class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser]
     permission_classes = [
         # permissions.IsAuthenticated,
-        # IsOwnerPermission,
+        #
     ]
     lookup_field = "uuid"
 
@@ -49,6 +52,8 @@ class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
             return ChunkSerializer
         elif self.action in ["add_issue"]:
             return ChunkIssueSerializer
+        elif self.action in ["add_chunk_response"]:
+            return ChunkResponseSerializer
         return super().get_serializer_class()
 
     def perform_create(self, serializer):
@@ -97,3 +102,50 @@ class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
             return Response(ChunkIssueSerializer(issue).data, status=status.HTTP_201_CREATED)
         except Chunk.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=["post"], url_path="add-chunk-response")
+    def add_chunk_response(self, request, uuid=None):
+        queue = self.get_object()
+
+        # For now, we'll add the response to the first chunk of this queue
+        # In a more sophisticated implementation, you might specify which chunk
+        if not queue.chunks.exists():
+            return Response({"error": "No chunks found for this queue"}, status=status.HTTP_400_BAD_REQUEST)
+
+        chunk = queue.chunks.first()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        chunk_response = serializer.save(chunk=chunk)
+        return Response(ChunkResponseSerializer(chunk_response).data, status=status.HTTP_201_CREATED)
+
+
+class PromptViewSet(viewsets.ReadOnlyModelViewSet):
+    http_method_names = ["get"]
+
+    authentication_classes = [authentication.SessionAuthentication, JWTAuthentication]
+    permission_classes = [
+        # permissions.IsAuthenticated,
+        #
+    ]
+
+    queryset = Prompt.objects.all()
+    serializer_class = PromptSerializer
+
+    @action(detail=False, methods=["get"])
+    def latest(self, request):
+        prompt_type = request.query_params.get("type")
+        if prompt_type is None:
+            return Response({"error": "type parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            prompt_type = int(prompt_type)
+        except ValueError:
+            return Response({"error": "type must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            latest_prompt = Prompt.objects.filter(type=prompt_type).latest("created_at")
+            serializer = self.get_serializer(latest_prompt)
+            return Response(serializer.data)
+        except Prompt.DoesNotExist:
+            return Response({"error": f"No prompt found for type {prompt_type}"}, status=status.HTTP_404_NOT_FOUND)
