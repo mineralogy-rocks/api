@@ -10,6 +10,7 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
+from .filters import PromptFilter
 from .filters import QueueFilter
 from .mixins import CodeVersionMixin
 from .models import Chunk
@@ -126,26 +127,17 @@ class PromptViewSet(viewsets.ReadOnlyModelViewSet):
     authentication_classes = [authentication.SessionAuthentication, JWTAuthentication]
     permission_classes = [
         # permissions.IsAuthenticated,
-        #
     ]
 
     queryset = Prompt.objects.all()
     serializer_class = PromptSerializer
 
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+
+    filterset_class = PromptFilter
+
     @action(detail=False, methods=["get"])
     def latest(self, request):
-        prompt_type = request.query_params.get("type")
-        if prompt_type is None:
-            return Response({"error": "type parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            prompt_type = int(prompt_type)
-        except ValueError:
-            return Response({"error": "type must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            latest_prompt = Prompt.objects.filter(type=prompt_type).latest("created_at")
-            serializer = self.get_serializer(latest_prompt)
-            return Response(serializer.data)
-        except Prompt.DoesNotExist:
-            return Response({"error": f"No prompt found for type {prompt_type}"}, status=status.HTTP_404_NOT_FOUND)
+        _prompt = self.get_queryset().latest("created_at")
+        serializer = self.get_serializer(_prompt)
+        return Response(serializer.data)

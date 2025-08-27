@@ -307,6 +307,9 @@ class Chunk(BaseModel, Creatable):
     is_approved = models.BooleanField(
         default=False, help_text=_("Flag to indicate if the chunk should be used for further processing")
     )
+    head = models.JSONField(
+        null=True, blank=True, help_text=_("Table head preview (first few rows) for frontend display")
+    )
 
     class Meta:
         verbose_name = "Chunk"

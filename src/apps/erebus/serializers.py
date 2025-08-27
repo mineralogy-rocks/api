@@ -24,6 +24,7 @@ class ChunkSerializer(serializers.ModelSerializer):
             "version",
             "code_version",
             "status",
+            "head",
         ]
 
     def create(self, validated_data):
