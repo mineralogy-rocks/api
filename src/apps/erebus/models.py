@@ -304,11 +304,16 @@ class Chunk(BaseModel, Creatable):
         CodeVersion, on_delete=models.SET_NULL, null=True, help_text=_("Code version used for processing")
     )
     version = models.IntegerField(default=1, help_text=_("Version of the chunk"))
-    is_approved = models.BooleanField(
-        default=False, help_text=_("Flag to indicate if the chunk should be used for further processing")
-    )
+
     head = models.JSONField(
         null=True, blank=True, help_text=_("Table head preview (first few rows) for frontend display")
+    )
+
+    extract_composition = models.BooleanField(
+        default=True, help_text=_("Flag to indicate if the chunk should be used for extracting composition")
+    )
+    extract_metadata = models.BooleanField(
+        default=True, help_text=_("Flag to indicate if the chunk should be used for extracting metadata")
     )
 
     class Meta:
@@ -374,6 +379,7 @@ class Prompt(BaseModel, Creatable):
 class ChunkResponse(BaseModel, Creatable, Updatable):
     chunk = models.ForeignKey(Chunk, on_delete=models.CASCADE, null=False, related_name="responses")
     prompt = models.ForeignKey(Prompt, on_delete=models.SET_NULL, null=True, related_name="responses")
+    model = models.CharField(max_length=100, null=False, help_text=_("Model used for response generation"))
 
     response = models.TextField(null=True, blank=True, help_text=_("Raw response(s) from AI service"))
     clean_response = models.JSONField(null=True, blank=True, help_text=_("Parsed response from AI service"))

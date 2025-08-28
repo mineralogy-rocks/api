@@ -27,7 +27,7 @@ def schedule_processing(modeladmin, request, queryset):
 class ChunkInline(admin.TabularInline):
     model = Chunk
     extra = 0
-    fields = ["name", "version", "is_approved", "created_at", "responses_count", "link"]
+    fields = ["name", "version", "extract_composition", "extract_metadata", "created_at", "responses_count", "link"]
     readonly_fields = ["name", "version", "created_at", "responses_count", "link"]
     can_delete = False
     show_change_link = True
@@ -114,12 +114,12 @@ class QueueAdmin(admin.ModelAdmin):
 
 @admin.action(description="Mark as approved")
 def mark_approved(modeladmin, request, queryset):
-    queryset.update(is_approved=True)
+    queryset.update(extract_composition=True, extract_metadata=True)
 
 
 @admin.action(description="Mark as not approved")
 def mark_not_approved(modeladmin, request, queryset):
-    queryset.update(is_approved=False)
+    queryset.update(extract_composition=False, extract_metadata=False)
 
 
 @admin.register(Chunk)
@@ -129,7 +129,8 @@ class ChunkAdmin(admin.ModelAdmin):
         "name",
         "parent",
         "version",
-        "is_approved",
+        "extract_composition",
+        "extract_metadata",
         "_code_version",
         "created_at",
         "responses_count",
@@ -141,7 +142,8 @@ class ChunkAdmin(admin.ModelAdmin):
     ]
 
     list_filter = [
-        "is_approved",
+        "extract_composition",
+        "extract_metadata",
         "version",
         "parent",
     ]

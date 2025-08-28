@@ -25,6 +25,8 @@ class ChunkSerializer(serializers.ModelSerializer):
             "code_version",
             "status",
             "head",
+            "extract_composition",
+            "extract_metadata",
         ]
 
     def create(self, validated_data):
