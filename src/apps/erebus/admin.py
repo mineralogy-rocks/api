@@ -27,21 +27,20 @@ def schedule_processing(modeladmin, request, queryset):
 class ChunkInline(admin.TabularInline):
     model = Chunk
     extra = 0
-    fields = ["name", "version", "extract_composition", "extract_metadata", "created_at", "responses_count", "link"]
-    readonly_fields = ["name", "version", "created_at", "responses_count", "link"]
+    fields = ["hash", "version", "extract_composition", "extract_metadata", "created_at", "responses_count"]
+    readonly_fields = [
+        "hash",
+        "version",
+        "created_at",
+        "responses_count",
+    ]
     can_delete = False
     show_change_link = True
 
     def responses_count(self, obj):
         return obj.responses.count()
 
-    def link(self, obj):
-        if obj.file:
-            return format_html('<a href="{}" target="_blank">Download</a>', obj.file.url)
-        return "-"
-
     responses_count.short_description = "Responses"
-    link.short_description = "Download"
 
 
 @admin.register(Queue)
@@ -126,7 +125,7 @@ def mark_not_approved(modeladmin, request, queryset):
 class ChunkAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "name",
+        "hash",
         "parent",
         "version",
         "extract_composition",
@@ -134,11 +133,10 @@ class ChunkAdmin(admin.ModelAdmin):
         "_code_version",
         "created_at",
         "responses_count",
-        "link",
     ]
 
     list_display_links = [
-        "name",
+        "hash",
     ]
 
     list_filter = [
@@ -149,7 +147,7 @@ class ChunkAdmin(admin.ModelAdmin):
     ]
 
     search_fields = [
-        "name",
+        "hash",
         "parent__name",
     ]
 
@@ -165,9 +163,6 @@ class ChunkAdmin(admin.ModelAdmin):
 
     def _code_version(self, obj):
         return obj.code_version.version if obj.code_version else None
-
-    def link(self, obj):
-        return format_html('<a href="{}" target="_blank">Download</a>', obj.file.url)
 
     def responses_count(self, obj):
         return obj.responses.count()

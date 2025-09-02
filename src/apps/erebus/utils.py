@@ -17,7 +17,7 @@ class ErebusStorage(S3Boto3Storage):
 
 
 def _get_upload_path(instance, filename):
-    return f"{instance.uuid}/unprocessed/{filename}"
+    return f"{instance.uuid}/{filename}"
 
 
 def _get_parsed_path(instance, filename):

@@ -9,7 +9,9 @@ app_name = "erebus"
 router = DefaultRouter()
 
 router.register(r"queue", views.QueueViewSet, basename="queue")
+router.register(r"chunk", views.ChunkViewSet, basename="chunk")
 router.register(r"prompt", views.PromptViewSet, basename="prompt")
+router.register(r"component", views.ComponentViewSet, basename="component")
 
 urlpatterns = [
     path("", include(router.urls)),

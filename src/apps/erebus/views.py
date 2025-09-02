@@ -1,4 +1,5 @@
 # -*- coding: UTF-8 -*-
+
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import authentication
 from rest_framework import filters
@@ -10,15 +11,19 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
+from .filters import ChunkFilter
 from .filters import PromptFilter
 from .filters import QueueFilter
 from .mixins import CodeVersionMixin
 from .models import Chunk
+from .models import Component
 from .models import Prompt
 from .models import Queue
+from .serializers import BaseChunkSerializer
 from .serializers import ChunkIssueSerializer
 from .serializers import ChunkResponseSerializer
 from .serializers import ChunkSerializer
+from .serializers import ComponentSerializer
 from .serializers import PromptSerializer
 from .serializers import QueueSerializer
 
@@ -75,6 +80,7 @@ class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
         code_version = self.generate_code_version()
         if code_version:
             _data["code_version"] = code_version.id
+
         serializer = self.get_serializer(data=_data)
         serializer.is_valid(raise_exception=True)
 
@@ -121,6 +127,53 @@ class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
         return Response(ChunkResponseSerializer(chunk_response).data, status=status.HTTP_201_CREATED)
 
 
+class ChunkViewSet(viewsets.ReadOnlyModelViewSet):
+    http_method_names = ["get"]
+    authentication_classes = [authentication.SessionAuthentication, JWTAuthentication]
+    queryset = Chunk.objects.all()
+    permission_classes = [
+        # permissions.IsAuthenticated,
+    ]
+
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+
+    filterset_class = ChunkFilter
+
+    def get_serializer_class(self):
+        if self.action == "list":
+            return BaseChunkSerializer
+        return ChunkSerializer
+
+    def get_object(self):
+        lookup_value = self.kwargs[self.lookup_field]
+
+        try:
+            if lookup_value.isdigit():
+                return self.get_queryset().get(id=lookup_value)
+            else:
+                return self.get_queryset().get(hash=lookup_value)
+        except Chunk.DoesNotExist:
+            return super().get_object()
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        queryset = queryset.select_related("parent", "code_version")
+        return queryset
+
+    @action(detail=False, methods=["get"], url_path="awaiting-processing")
+    def awaiting_processing(self, request):
+        _queues = Queue.objects.filter(status=Queue.STATUS_PARSED)
+
+        _chunk_ids = []
+        for _queue in _queues:
+            _latest_version = _queue.chunks.order_by("-version").first()
+            if _latest_version:
+                _chunk_ids += _queue.chunks.filter(version=_latest_version.version).values_list("id", flat=True)
+
+        serializer = ChunkSerializer(Chunk.objects.filter(id__in=_chunk_ids), context={"request": request}, many=True)
+        return Response(serializer.data)
+
+
 class PromptViewSet(viewsets.ReadOnlyModelViewSet):
     http_method_names = ["get"]
 
@@ -141,3 +194,16 @@ class PromptViewSet(viewsets.ReadOnlyModelViewSet):
         _prompt = self.get_queryset().latest("created_at")
         serializer = self.get_serializer(_prompt)
         return Response(serializer.data)
+
+
+class ComponentViewSet(viewsets.ReadOnlyModelViewSet):
+    http_method_names = ["get"]
+
+    authentication_classes = [authentication.SessionAuthentication, JWTAuthentication]
+    permission_classes = [
+        # permissions.IsAuthenticated,
+    ]
+
+    queryset = Component.objects.all()
+    serializer_class = ComponentSerializer
+    pagination_class = None

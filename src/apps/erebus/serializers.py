@@ -6,28 +6,37 @@ from .models import Chunk
 from .models import ChunkIssue
 from .models import ChunkResponse
 from .models import CodeVersion
+from .models import Component
 from .models import Prompt
 from .models import Queue
 
 
-class ChunkSerializer(serializers.ModelSerializer):
+class BaseChunkSerializer(serializers.ModelSerializer):
     code_version = serializers.PrimaryKeyRelatedField(
         queryset=CodeVersion.objects.all(), required=False, allow_null=True
     )
     status = serializers.ChoiceField(choices=Queue.STATUS_CHOICES, write_only=True, required=False)
+    url = serializers.HyperlinkedIdentityField(
+        view_name="erebus:chunk-detail", read_only=True, lookup_url_kwarg="pk", lookup_field="hash"
+    )
 
     class Meta:
         model = Chunk
         fields = [
-            "name",
-            "file",
+            "hash",
             "version",
             "code_version",
             "status",
-            "head",
             "extract_composition",
             "extract_metadata",
+            "url",
         ]
+
+
+class ChunkSerializer(BaseChunkSerializer):
+    class Meta:
+        model = Chunk
+        fields = BaseChunkSerializer.Meta.fields + ["data"]
 
     def create(self, validated_data):
         parent = validated_data.pop("parent")
@@ -52,7 +61,7 @@ class ChunkSerializer(serializers.ModelSerializer):
 class QueueSerializer(serializers.ModelSerializer):
     uuid = serializers.UUIDField(read_only=True)
     parsing_version = serializers.IntegerField(read_only=True, default=0)
-    chunks = ChunkSerializer(many=True, read_only=True)
+    chunks = BaseChunkSerializer(many=True, read_only=True)
 
     class Meta:
         model = Queue
@@ -144,4 +153,14 @@ class PromptSerializer(serializers.ModelSerializer):
             "text",
             "type",
             "created_at",
+        ]
+
+
+class ComponentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Component
+        fields = [
+            "id",
+            "name",
+            "is_major",
         ]

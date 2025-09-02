@@ -34,3 +34,13 @@ class PromptFilter(filters.FilterSet):
         fields = [
             "type",
         ]
+
+
+class ChunkFilter(filters.FilterSet):
+    status = filters.BaseInFilter(field_name="parent__status")
+
+    class Meta:
+        model = Chunk
+        fields = [
+            "status",
+        ]

@@ -1,5 +1,6 @@
 # -*- coding: UTF-8 -*-
 import mimetypes
+import secrets
 import uuid
 
 from core.models.base import BaseModel
@@ -14,7 +15,6 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from .utils import ErebusStorage
-from .utils import _get_parsed_path
 from .utils import _get_upload_path
 
 
@@ -287,27 +287,17 @@ class CodeVersion(BaseModel, Creatable):
 
 
 class Chunk(BaseModel, Creatable):
-    name = models.CharField(max_length=1000, null=False, help_text=_("Chunk name"))
+    hash = models.CharField(max_length=21, null=True, help_text=_("Hash of the chunk"))
 
     parent = models.ForeignKey(
         Queue, on_delete=models.CASCADE, null=False, related_name="chunks", help_text=_("Parent file of the chunk")
     )
-    file = models.FileField(
-        upload_to=_get_parsed_path,
-        storage=ErebusStorage(),
-        max_length=1000,
-        null=False,
-        help_text=_("File chunk stored in S3"),
-    )
-
     code_version = models.ForeignKey(
         CodeVersion, on_delete=models.SET_NULL, null=True, help_text=_("Code version used for processing")
     )
     version = models.IntegerField(default=1, help_text=_("Version of the chunk"))
 
-    head = models.JSONField(
-        null=True, blank=True, help_text=_("Table head preview (first few rows) for frontend display")
-    )
+    data = models.JSONField(null=True, help_text=_("Raw data from the chunk"))
 
     extract_composition = models.BooleanField(
         default=True, help_text=_("Flag to indicate if the chunk should be used for extracting composition")
@@ -323,7 +313,12 @@ class Chunk(BaseModel, Creatable):
         get_latest_by = ["-created_at"]
 
     def __str__(self):
-        return self.name
+        return self.hash
+
+    def save(self, *args, **kwargs):
+        if not self.hash:
+            self.hash = secrets.token_urlsafe(12)
+        super().save(*args, **kwargs)
 
 
 class ChunkIssue(BaseModel, Creatable):
