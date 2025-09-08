@@ -23,6 +23,7 @@ urlpatterns = [
     path("", include("core.urls")),
     path("auth/", include("rest_framework.urls", namespace="rest_framework")),
     path("blog/", include("blog.urls"), name="blog"),
+    path("erebus/", include("erebus.urls"), name="erebus"),
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
         "schema/swagger-ui/",

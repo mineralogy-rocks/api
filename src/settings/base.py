@@ -28,6 +28,8 @@ SCHEMA = os.environ.get("DJANGO_SCHEMA")
 
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 3000
 
+DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -73,6 +75,8 @@ INSTALLED_APPS = [
     "corsheaders",
     "core",
     "blog",
+    "erebus",
+    "users",
 ]
 
 MIDDLEWARE = [
@@ -149,6 +153,7 @@ DATABASES = {
     }
 }
 
+AUTH_USER_MODEL = "users.User"
 
 # Password validation
 # https://docs.djangoproject.com/en/3.1/ref/settings/#auth-password-validators
@@ -182,6 +187,7 @@ USE_L10N = True
 
 USE_TZ = True
 
+ATOMIC_REQUESTS = True
 
 # Settings for REST Framework
 
@@ -231,3 +237,9 @@ SPECTACULAR_SETTINGS = {
     # 'SERVE_INCLUDE_SCHEMA': False
     "SWAGGER_UI_DIST": "//unpkg.com/swagger-ui-dist@3.52.2",
 }
+
+
+EREBUS_ACCESS_KEY_ID = os.environ.get("EREBUS_ACCESS_KEY_ID")
+EREBUS_SECRET_ACCESS_KEY = os.environ.get("EREBUS_SECRET_ACCESS_KEY")
+EREBUS_STORAGE_BUCKET_NAME = os.environ.get("EREBUS_STORAGE_BUCKET_NAME")
+EREBUS_S3_ENDPOINT_URL = os.environ.get("EREBUS_S3_ENDPOINT_URL")

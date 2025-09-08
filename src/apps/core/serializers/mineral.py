@@ -22,7 +22,6 @@ from ..models.mineral import MineralRelation
 from ..models.mineral import MineralStructure
 from ..queries import GET_DATA_CONTEXTS_QUERY
 from ..serializers.core import StatusListSerializer
-from ..utils import add_label
 from .core import CountryListSerializer
 from .core import FormulaSourceSerializer
 from .crystal import CrystalClassSerializer
@@ -571,7 +570,7 @@ class MineralRelationsSerializer(BaseMineralRelationsSerializer):
         return instance.relation._formulas[0].formula if instance.relation._formulas else None
 
 
-class MineralAnalyticalDataSerializer(serializers.ModelSerializer):
+class MineralStructureSerializer(serializers.ModelSerializer):
     class Meta:
         model = MineralStructure
         fields = [
@@ -583,23 +582,4 @@ class MineralAnalyticalDataSerializer(serializers.ModelSerializer):
             "beta",
             "gamma",
             "volume",
-            "space_group",
-            "formula",
-            "calculated_formula",
-            "note",
-            "links",
-            "reference",
         ]
-
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-
-        data["a"] = add_label(data["a"], instance.a_sigma, "Å")
-        data["b"] = add_label(data["b"], instance.b_sigma, "Å")
-        data["c"] = add_label(data["c"], instance.c_sigma, "Å")
-        data["alpha"] = add_label(data["alpha"], instance.alpha_sigma, "°")
-        data["beta"] = add_label(data["beta"], instance.beta_sigma, "°")
-        data["gamma"] = add_label(data["gamma"], instance.gamma_sigma, "°")
-        data["volume"] = add_label(data["volume"], instance.volume_sigma, "Å³")
-
-        return data

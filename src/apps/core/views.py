@@ -46,12 +46,12 @@ from .serializers.core import NsFamilyListSerializer
 from .serializers.core import NsSubclassListSerializer
 from .serializers.core import StatusListSerializer
 from .serializers.mineral import BaseMineralRelationsSerializer
-from .serializers.mineral import MineralAnalyticalDataSerializer
 from .serializers.mineral import MineralListSecondarySerializer
 from .serializers.mineral import MineralListSerializer
 from .serializers.mineral import MineralRelationsSerializer
 from .serializers.mineral import MineralRelationTreeSerializer
 from .serializers.mineral import MineralSmallSerializer
+from .serializers.mineral import MineralStructureSerializer
 from .serializers.mineral import RetrieveController
 
 
@@ -380,8 +380,6 @@ class MineralViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
             "related_minerals",
         ]:
             return MineralRelationsSerializer
-        elif self.action in ["analytical_data"]:
-            return MineralAnalyticalDataSerializer
 
         return super().get_serializer_class()
 
@@ -538,7 +536,11 @@ class MineralViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
         _relations = instance.horizontal_relations
 
         _relations = MineralInheritance.get_redirect_ids(_relations, INHERIT_CRYSTAL_SYSTEM)
-        return Response(MineralStructure.aggregate_by_system(_relations), status=status.HTTP_200_OK)
+
+        queryset = MineralStructure.objects.filter(mineral__in=_relations)
+        data = MineralStructureSerializer(queryset, many=True).data
+        return Response(data, status=status.HTTP_200_OK)
+        # return Response(MineralStructure.aggregate_by_system(_relations), status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["get"])
     def elements(self, request, *args, **options):
@@ -597,7 +599,9 @@ class RelationViewSet(RetrieveModelMixin, GenericViewSet):
                 self._build_branch(__mineral, relations, current_branch)
 
     @staticmethod
-    def _get_relations(ids, filter_arg={}):
+    def _get_relations(ids, filter_arg=None):
+        if filter_arg is None:
+            filter_arg = {}
         _queryset = list(
             MineralRelation.objects.filter(
                 status__direct_status=True,
