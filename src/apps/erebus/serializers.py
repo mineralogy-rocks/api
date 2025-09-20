@@ -1,4 +1,5 @@
 # -*- coding: UTF-8 -*-
+from django.db import models
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -97,6 +98,50 @@ class QueueSerializer(serializers.ModelSerializer):
         select_related = []
         prefetch_related = [
             "chunks__code_version",
+        ]
+
+        queryset = queryset.select_related(*select_related).prefetch_related(*prefetch_related)
+        return queryset
+
+
+class QueueToProcessSerializer(serializers.ModelSerializer):
+    uuid = serializers.UUIDField(read_only=True)
+    parsing_version = serializers.IntegerField(read_only=True, default=0)
+    chunks = BaseChunkSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Queue
+        fields = [
+            "uuid",
+            "name",
+            "description",
+            "status",
+            "file",
+            "size",
+            "mime_type",
+            "parsing_version",
+            "chunks",
+        ]
+
+    @staticmethod
+    def setup_eager_loading(**kwargs):
+        queryset = kwargs.get("queryset")
+
+        _max_version = (
+            Chunk.objects.filter(parent=models.OuterRef("parent"))
+            .values("parent")
+            .annotate(max_version=models.Max("version"))
+            .values("max_version")
+        )
+
+        select_related = []
+        prefetch_related = [
+            models.Prefetch(
+                "chunks",
+                queryset=Chunk.objects.filter(models.Q(extract_composition=True) | models.Q(extract_metadata=True))
+                .filter(version=models.Subquery(_max_version))
+                .select_related("code_version"),
+            )
         ]
 
         queryset = queryset.select_related(*select_related).prefetch_related(*prefetch_related)

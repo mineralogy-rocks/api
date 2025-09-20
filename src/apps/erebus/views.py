@@ -1,5 +1,6 @@
 # -*- coding: UTF-8 -*-
 
+from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import authentication
 from rest_framework import filters
@@ -26,6 +27,7 @@ from .serializers import ChunkSerializer
 from .serializers import ComponentSerializer
 from .serializers import PromptSerializer
 from .serializers import QueueSerializer
+from .serializers import QueueToProcessSerializer
 
 
 class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
@@ -60,6 +62,8 @@ class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
             return ChunkIssueSerializer
         elif self.action in ["add_chunk_response"]:
             return ChunkResponseSerializer
+        elif self.action in ["awaiting_processing"]:
+            return QueueToProcessSerializer
         return super().get_serializer_class()
 
     def perform_create(self, serializer):
@@ -126,6 +130,10 @@ class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
         chunk_response = serializer.save(chunk=chunk)
         return Response(ChunkResponseSerializer(chunk_response).data, status=status.HTTP_201_CREATED)
 
+    @action(detail=False, methods=["get"], url_path="awaiting-processing")
+    def awaiting_processing(self, request):
+        return super().list(request)
+
 
 class ChunkViewSet(viewsets.ReadOnlyModelViewSet):
     http_method_names = ["get"]
@@ -140,7 +148,7 @@ class ChunkViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_class = ChunkFilter
 
     def get_serializer_class(self):
-        if self.action == "list":
+        if self.action in ["list", "awaiting_processing"]:
             return BaseChunkSerializer
         return ChunkSerializer
 
@@ -168,9 +176,19 @@ class ChunkViewSet(viewsets.ReadOnlyModelViewSet):
         for _queue in _queues:
             _latest_version = _queue.chunks.order_by("-version").first()
             if _latest_version:
-                _chunk_ids += _queue.chunks.filter(version=_latest_version.version).values_list("id", flat=True)
+                _chunk_ids += _queue.chunks.filter(
+                    Q(version=_latest_version.version) & (Q(extract_composition=1) | Q(extract_metadata=1))
+                ).values_list("id", flat=True)
 
-        serializer = ChunkSerializer(Chunk.objects.filter(id__in=_chunk_ids), context={"request": request}, many=True)
+        queryset = Chunk.objects.filter(id__in=_chunk_ids)
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer_class = self.get_serializer_class()
+            serializer = serializer_class(page, context={"request": request}, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer_class = self.get_serializer_class()
+        serializer = serializer_class(queryset, context={"request": request}, many=True)
         return Response(serializer.data)
 
 
@@ -191,9 +209,11 @@ class PromptViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=["get"])
     def latest(self, request):
-        _prompt = self.get_queryset().latest("created_at")
-        serializer = self.get_serializer(_prompt)
-        return Response(serializer.data)
+        _prompt = self.filter_queryset(self.get_queryset())
+        if _prompt.exists():
+            serializer = self.get_serializer(_prompt.latest("created_at"))
+            return Response(serializer.data)
+        return Response(status=status.HTTP_404_NOT_FOUND)
 
 
 class ComponentViewSet(viewsets.ReadOnlyModelViewSet):
