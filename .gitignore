@@ -17,3 +17,5 @@ nginx/prod/h5bp/tls/certificate_files.conf
 nginx/prod/h5bp/cross-origin/requests.conf
 nginx/prod/conf.d/domain.conf
 nginx/prod/conf.d/no-ssl.domain.conf
+
+.serena
