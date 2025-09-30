@@ -32,6 +32,15 @@ class Component(BaseModel, Nameable):
         verbose_name_plural = "Components"
 
 
+class Unit(BaseModel, Nameable):
+    class Meta:
+        ordering = [
+            "name",
+        ]
+        verbose_name = "Unit"
+        verbose_name_plural = "Units"
+
+
 class Measurement(BaseModel, Creatable):
     ALTERATION_CHOICES = (
         (1, "Almost totally altered"),
@@ -371,26 +380,64 @@ class Prompt(BaseModel, Creatable):
         get_latest_by = ["-created_at"]
 
 
-class ChunkResponse(BaseModel, Creatable, Updatable):
-    chunk = models.ForeignKey(Chunk, on_delete=models.CASCADE, null=False, related_name="responses")
+class AIResponse(BaseModel, Creatable):
+    MODEL_GPT_5_NANO = "gpt-5-nano"
+
+    MODEL_CHOICES = ((MODEL_GPT_5_NANO, _("GPT-5 Nano")),)
+
+    hash = models.CharField(max_length=21, null=True, help_text=_("Hash of the chunk"))
+
+    queue = models.ForeignKey(Queue, on_delete=models.CASCADE, null=False, related_name="responses")
+    chunks = models.ManyToManyField(Chunk, through="AIResponseChunk", related_name="ai_responses")
     prompt = models.ForeignKey(Prompt, on_delete=models.SET_NULL, null=True, related_name="responses")
-    model = models.CharField(max_length=100, null=False, help_text=_("Model used for response generation"))
+    model = models.CharField(choices=MODEL_CHOICES, null=False, help_text=_("Model used for processing"))
 
-    response = models.TextField(null=True, blank=True, help_text=_("Raw response(s) from AI service"))
-    clean_response = models.JSONField(null=True, blank=True, help_text=_("Parsed response from AI service"))
+    prompt_text = models.TextField(null=True, blank=True, help_text=_("Prompt text used for response generation"))
+    response_raw = models.TextField(null=True, blank=True, help_text=_("Raw response text from AI service"))
+    response_parsed = models.JSONField(null=True, blank=True, help_text=_("Parsed response from AI service"))
 
-    is_extracted = models.BooleanField(
-        default=False, help_text=_("Flag to indicate if structural data is extracted from the response to the database")
-    )
     is_error = models.BooleanField(default=False, help_text=_("Flag to indicate if processing/extraction failed"))
-
     exception = models.TextField(null=True, blank=True, help_text=_("Exception message"))
 
+    processed_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of processing completion"))
+
     class Meta:
-        verbose_name = "Chunk Response"
-        verbose_name_plural = "Chunk Responses"
-        ordering = ["-created_at", "-updated_at"]
+        verbose_name = "AI Response"
+        verbose_name_plural = "AI Responses"
+        ordering = ["-created_at"]
         get_latest_by = ["-created_at"]
 
     def __str__(self):
-        return self.name
+        return self.hash
+
+    def save(self, *args, **kwargs):
+        if not self.hash:
+            self.hash = secrets.token_urlsafe(12)
+        super().save(*args, **kwargs)
+
+
+class AIResponseChunk(BaseModel):
+    ai_response = models.ForeignKey(
+        AIResponse,
+        on_delete=models.CASCADE,
+        null=False,
+        related_name="chunk_associations",
+        help_text=_("AI response"),
+    )
+    chunk = models.ForeignKey(
+        Chunk,
+        on_delete=models.CASCADE,
+        null=False,
+        related_name="response_associations",
+        help_text=_("Chunk used in AI response"),
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text=_("Order of chunk in the AI response processing"),
+    )
+
+    class Meta:
+        verbose_name = "AI Response Chunk"
+        verbose_name_plural = "AI Response Chunks"
+        ordering = ["ai_response", "order"]
+        unique_together = ["ai_response", "chunk"]

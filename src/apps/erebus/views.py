@@ -20,9 +20,9 @@ from .models import Chunk
 from .models import Component
 from .models import Prompt
 from .models import Queue
+from .serializers import AIResponseSerializer
 from .serializers import BaseChunkSerializer
 from .serializers import ChunkIssueSerializer
-from .serializers import ChunkResponseSerializer
 from .serializers import ChunkSerializer
 from .serializers import ComponentSerializer
 from .serializers import PromptSerializer
@@ -60,8 +60,8 @@ class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
             return ChunkSerializer
         elif self.action in ["add_issue"]:
             return ChunkIssueSerializer
-        elif self.action in ["add_chunk_response"]:
-            return ChunkResponseSerializer
+        elif self.action in ["add_ai_response"]:
+            return AIResponseSerializer
         elif self.action in ["awaiting_processing"]:
             return QueueToProcessSerializer
         return super().get_serializer_class()
@@ -114,21 +114,15 @@ class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
         except Chunk.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-    @action(detail=True, methods=["post"], url_path="add-chunk-response")
-    def add_chunk_response(self, request, uuid=None):
+    @action(detail=True, methods=["post"], url_path="add-ai-response")
+    def add_ai_response(self, request, uuid=None):
         queue = self.get_object()
 
-        # For now, we'll add the response to the first chunk of this queue
-        # In a more sophisticated implementation, you might specify which chunk
-        if not queue.chunks.exists():
-            return Response({"error": "No chunks found for this queue"}, status=status.HTTP_400_BAD_REQUEST)
-
-        chunk = queue.chunks.first()
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        chunk_response = serializer.save(chunk=chunk)
-        return Response(ChunkResponseSerializer(chunk_response).data, status=status.HTTP_201_CREATED)
+        ai_response = serializer.save(queue=queue)
+        return Response(AIResponseSerializer(ai_response).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["get"], url_path="awaiting-processing")
     def awaiting_processing(self, request):

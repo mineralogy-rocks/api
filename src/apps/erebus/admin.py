@@ -7,9 +7,9 @@ from django.utils.safestring import mark_safe
 
 from .forms import PromptForm
 from .forms import QueueForm
+from .models import AIResponse
 from .models import Chunk
 from .models import ChunkIssue
-from .models import ChunkResponse
 from .models import Prompt
 from .models import Queue
 
@@ -252,42 +252,42 @@ class PromptAdmin(admin.ModelAdmin):
     text_preview.short_description = "Text Preview"
 
 
-@admin.register(ChunkResponse)
-class ChunkResponseAdmin(admin.ModelAdmin):
+@admin.register(AIResponse)
+class AIResponseAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "chunk",
+        "hash",
+        "queue",
         "prompt",
-        "is_extracted",
+        "model",
         "is_error",
         "response_preview",
         "exception_preview",
         "created_at",
-        "updated_at",
     ]
 
     list_filter = [
-        "is_extracted",
         "is_error",
-        "chunk",
+        "model",
+        "queue",
         "prompt",
     ]
 
     search_fields = [
-        "chunk__name",
-        "response",
+        "hash",
+        "queue__name",
+        "response_raw",
         "exception",
     ]
 
     readonly_fields = [
         "created_at",
-        "updated_at",
-        "formatted_clean_response",
+        "formatted_response_parsed",
     ]
 
     def response_preview(self, obj):
-        if obj.response:
-            return obj.response[:100] + "..." if len(obj.response) > 100 else obj.response
+        if obj.response_raw:
+            return obj.response_raw[:100] + "..." if len(obj.response_raw) > 100 else obj.response_raw
         return "-"
 
     def exception_preview(self, obj):
@@ -295,10 +295,10 @@ class ChunkResponseAdmin(admin.ModelAdmin):
             return obj.exception[:100] + "..." if len(obj.exception) > 100 else obj.exception
         return "-"
 
-    def formatted_clean_response(self, obj):
-        if obj.clean_response:
+    def formatted_response_parsed(self, obj):
+        if obj.response_parsed:
             try:
-                formatted_json = json.dumps(obj.clean_response, indent=4)
+                formatted_json = json.dumps(obj.response_parsed, indent=4)
                 return mark_safe(f"<pre>{formatted_json}</pre>")
             except Exception as e:
                 return f"Error formatting JSON: {str(e)}"
@@ -306,4 +306,4 @@ class ChunkResponseAdmin(admin.ModelAdmin):
 
     response_preview.short_description = "Response Preview"
     exception_preview.short_description = "Exception Preview"
-    formatted_clean_response.short_description = "Formatted Clean Response"
+    formatted_response_parsed.short_description = "Formatted Response Parsed"

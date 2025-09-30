@@ -3,9 +3,9 @@ from django.db import models
 from django.utils import timezone
 from rest_framework import serializers
 
+from .models import AIResponse
 from .models import Chunk
 from .models import ChunkIssue
-from .models import ChunkResponse
 from .models import CodeVersion
 from .models import Component
 from .models import Prompt
@@ -107,7 +107,7 @@ class QueueSerializer(serializers.ModelSerializer):
 class QueueToProcessSerializer(serializers.ModelSerializer):
     uuid = serializers.UUIDField(read_only=True)
     parsing_version = serializers.IntegerField(read_only=True, default=0)
-    chunks = BaseChunkSerializer(many=True, read_only=True)
+    chunks = ChunkSerializer(many=True, read_only=True)
 
     class Meta:
         model = Queue
@@ -169,25 +169,29 @@ class ChunkIssueSerializer(serializers.ModelSerializer):
         return ChunkIssue.objects.create(**validated_data, **data)
 
 
-class ChunkResponseSerializer(serializers.ModelSerializer):
+class AIResponseSerializer(serializers.ModelSerializer):
     prompt = serializers.PrimaryKeyRelatedField(queryset=Prompt.objects.all(), required=False, allow_null=True)
 
     class Meta:
-        model = ChunkResponse
+        model = AIResponse
         fields = [
             "id",
-            "response",
-            "clean_response",
+            "hash",
+            "queue",
             "prompt",
-            "is_extracted",
+            "model",
+            "prompt_text",
+            "response_raw",
+            "response_parsed",
             "is_error",
             "exception",
+            "processed_at",
         ]
 
     def create(self, validated_data):
-        chunk = validated_data.pop("chunk")
+        queue = validated_data.pop("queue")
 
-        return ChunkResponse.objects.create(chunk=chunk, **validated_data)
+        return AIResponse.objects.create(queue=queue, **validated_data)
 
 
 class PromptSerializer(serializers.ModelSerializer):
