@@ -1,6 +1,5 @@
 # -*- coding: UTF-8 -*-
 import mimetypes
-import secrets
 import uuid
 
 from core.models.base import BaseModel
@@ -15,6 +14,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from .utils import ErebusStorage
+from .utils import _create_hash
 from .utils import _get_upload_path
 
 
@@ -326,7 +326,7 @@ class Chunk(BaseModel, Creatable):
 
     def save(self, *args, **kwargs):
         if not self.hash:
-            self.hash = secrets.token_urlsafe(12)
+            self.hash = _create_hash(12)
         super().save(*args, **kwargs)
 
 
@@ -388,7 +388,6 @@ class AIResponse(BaseModel, Creatable):
     hash = models.CharField(max_length=21, null=True, help_text=_("Hash of the chunk"))
 
     queue = models.ForeignKey(Queue, on_delete=models.CASCADE, null=False, related_name="responses")
-    chunks = models.ManyToManyField(Chunk, through="AIResponseChunk", related_name="ai_responses")
     prompt = models.ForeignKey(Prompt, on_delete=models.SET_NULL, null=True, related_name="responses")
     model = models.CharField(choices=MODEL_CHOICES, null=False, help_text=_("Model used for processing"))
 
@@ -401,6 +400,8 @@ class AIResponse(BaseModel, Creatable):
 
     processed_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of processing completion"))
 
+    chunks = models.ManyToManyField(Chunk, through="AIResponseChunk", related_name="ai_responses")
+
     class Meta:
         verbose_name = "AI Response"
         verbose_name_plural = "AI Responses"
@@ -412,7 +413,7 @@ class AIResponse(BaseModel, Creatable):
 
     def save(self, *args, **kwargs):
         if not self.hash:
-            self.hash = secrets.token_urlsafe(12)
+            self.hash = _create_hash(12)
         super().save(*args, **kwargs)
 
 
@@ -431,13 +432,11 @@ class AIResponseChunk(BaseModel):
         related_name="response_associations",
         help_text=_("Chunk used in AI response"),
     )
-    order = models.PositiveIntegerField(
-        default=0,
-        help_text=_("Order of chunk in the AI response processing"),
-    )
 
     class Meta:
         verbose_name = "AI Response Chunk"
         verbose_name_plural = "AI Response Chunks"
-        ordering = ["ai_response", "order"]
+        ordering = [
+            "-id",
+        ]
         unique_together = ["ai_response", "chunk"]

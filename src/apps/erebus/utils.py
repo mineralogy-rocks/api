@@ -1,4 +1,6 @@
 # -*- coding: UTF-8 -*-
+import secrets
+
 from django.conf import settings
 from storages.backends.s3boto3 import S3Boto3Storage
 
@@ -22,3 +24,7 @@ def _get_upload_path(instance, filename):
 
 def _get_parsed_path(instance, filename):
     return f"{instance.parent.uuid}/parsed/v{instance.version}/{filename}"
+
+
+def _create_hash(nbytes: int = 12) -> str:
+    return secrets.token_urlsafe(nbytes)

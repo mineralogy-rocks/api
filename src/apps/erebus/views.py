@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser
+from rest_framework.parsers import JSONParser
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -16,6 +17,7 @@ from .filters import ChunkFilter
 from .filters import PromptFilter
 from .filters import QueueFilter
 from .mixins import CodeVersionMixin
+from .models import AIResponse
 from .models import Chunk
 from .models import Component
 from .models import Prompt
@@ -35,7 +37,7 @@ class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
     authentication_classes = [authentication.SessionAuthentication, JWTAuthentication]
     queryset = Queue.objects.all()
     serializer_class = QueueSerializer
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     permission_classes = [
         # permissions.IsAuthenticated,
         #
@@ -60,8 +62,6 @@ class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
             return ChunkSerializer
         elif self.action in ["add_issue"]:
             return ChunkIssueSerializer
-        elif self.action in ["add_ai_response"]:
-            return AIResponseSerializer
         elif self.action in ["awaiting_processing"]:
             return QueueToProcessSerializer
         return super().get_serializer_class()
@@ -113,16 +113,6 @@ class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
             return Response(ChunkIssueSerializer(issue).data, status=status.HTTP_201_CREATED)
         except Chunk.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
-
-    @action(detail=True, methods=["post"], url_path="add-ai-response")
-    def add_ai_response(self, request, uuid=None):
-        queue = self.get_object()
-
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        ai_response = serializer.save(queue=queue)
-        return Response(AIResponseSerializer(ai_response).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["get"], url_path="awaiting-processing")
     def awaiting_processing(self, request):
@@ -208,6 +198,22 @@ class PromptViewSet(viewsets.ReadOnlyModelViewSet):
             serializer = self.get_serializer(_prompt.latest("created_at"))
             return Response(serializer.data)
         return Response(status=status.HTTP_404_NOT_FOUND)
+
+
+class AIResponseViewSet(viewsets.ModelViewSet):
+    http_method_names = ["get", "post", "put", "patch"]
+    authentication_classes = [authentication.SessionAuthentication, JWTAuthentication]
+    queryset = AIResponse.objects.all()
+    serializer_class = AIResponseSerializer
+    permission_classes = [
+        # permissions.IsAuthenticated,
+    ]
+    lookup_field = "hash"
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        queryset = queryset.select_related("queue", "prompt").prefetch_related("chunks")
+        return queryset
 
 
 class ComponentViewSet(viewsets.ReadOnlyModelViewSet):

@@ -103,6 +103,12 @@ class QueueSerializer(serializers.ModelSerializer):
         queryset = queryset.select_related(*select_related).prefetch_related(*prefetch_related)
         return queryset
 
+    def update(self, instance, validated_data):
+        _status = validated_data.get("status", None)
+        if _status and _status in [Queue.STATUS_AI_GENERATED]:
+            instance.ai_generated_at = timezone.now()
+        return super().update(instance, validated_data)
+
 
 class QueueToProcessSerializer(serializers.ModelSerializer):
     uuid = serializers.UUIDField(read_only=True)
@@ -170,13 +176,16 @@ class ChunkIssueSerializer(serializers.ModelSerializer):
 
 
 class AIResponseSerializer(serializers.ModelSerializer):
+    queue = serializers.SlugRelatedField(slug_field="uuid", queryset=Queue.objects.all(), required=True)
     prompt = serializers.PrimaryKeyRelatedField(queryset=Prompt.objects.all(), required=False, allow_null=True)
+    chunks = serializers.SlugRelatedField(slug_field="hash", many=True, queryset=Chunk.objects.all())
 
     class Meta:
         model = AIResponse
         fields = [
             "id",
             "hash",
+            "chunks",
             "queue",
             "prompt",
             "model",
@@ -189,9 +198,10 @@ class AIResponseSerializer(serializers.ModelSerializer):
         ]
 
     def create(self, validated_data):
-        queue = validated_data.pop("queue")
-
-        return AIResponse.objects.create(queue=queue, **validated_data)
+        _exception = validated_data.get("exception", None)
+        if _exception:
+            validated_data["is_error"] = True
+        return super().create(validated_data)
 
 
 class PromptSerializer(serializers.ModelSerializer):
