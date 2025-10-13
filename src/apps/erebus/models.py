@@ -391,13 +391,14 @@ class AIResponse(BaseModel, Creatable):
     prompt = models.ForeignKey(Prompt, on_delete=models.SET_NULL, null=True, related_name="responses")
     model = models.CharField(choices=MODEL_CHOICES, null=False, help_text=_("Model used for processing"))
 
-    prompt_text = models.TextField(null=True, blank=True, help_text=_("Prompt text used for response generation"))
+    request_raw = models.TextField(null=True, blank=True, help_text=_("Prompt text used for response generation"))
     response_raw = models.TextField(null=True, blank=True, help_text=_("Raw response text from AI service"))
     response_parsed = models.JSONField(null=True, blank=True, help_text=_("Parsed response from AI service"))
 
     is_error = models.BooleanField(default=False, help_text=_("Flag to indicate if processing/extraction failed"))
     exception = models.TextField(null=True, blank=True, help_text=_("Exception message"))
 
+    answered_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of response generation"))
     processed_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of processing completion"))
 
     chunks = models.ManyToManyField(Chunk, through="AIResponseChunk", related_name="ai_responses")

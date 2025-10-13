@@ -177,7 +177,7 @@ class ChunkIssueSerializer(serializers.ModelSerializer):
 
 class AIResponseSerializer(serializers.ModelSerializer):
     queue = serializers.SlugRelatedField(slug_field="uuid", queryset=Queue.objects.all(), required=True)
-    prompt = serializers.PrimaryKeyRelatedField(queryset=Prompt.objects.all(), required=False, allow_null=True)
+    prompt = serializers.PrimaryKeyRelatedField(queryset=Prompt.objects.all(), required=False)
     chunks = serializers.SlugRelatedField(slug_field="hash", many=True, queryset=Chunk.objects.all())
 
     class Meta:
@@ -189,7 +189,7 @@ class AIResponseSerializer(serializers.ModelSerializer):
             "queue",
             "prompt",
             "model",
-            "prompt_text",
+            "request_raw",
             "response_raw",
             "response_parsed",
             "is_error",
