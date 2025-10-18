@@ -185,6 +185,7 @@ class AIResponseSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "hash",
+            "batch",
             "chunks",
             "queue",
             "prompt",
@@ -194,6 +195,7 @@ class AIResponseSerializer(serializers.ModelSerializer):
             "response_parsed",
             "is_error",
             "exception",
+            "scheduled_at",
             "processed_at",
         ]
 

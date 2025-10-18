@@ -387,6 +387,7 @@ class AIResponse(BaseModel, Creatable):
 
     hash = models.CharField(max_length=21, null=True, help_text=_("Hash of the chunk"))
 
+    batch = models.CharField(max_length=255, null=True, help_text=_("Batch identifier for processing"))
     queue = models.ForeignKey(Queue, on_delete=models.CASCADE, null=False, related_name="responses")
     prompt = models.ForeignKey(Prompt, on_delete=models.SET_NULL, null=True, related_name="responses")
     model = models.CharField(choices=MODEL_CHOICES, null=False, help_text=_("Model used for processing"))
@@ -398,6 +399,7 @@ class AIResponse(BaseModel, Creatable):
     is_error = models.BooleanField(default=False, help_text=_("Flag to indicate if processing/extraction failed"))
     exception = models.TextField(null=True, blank=True, help_text=_("Exception message"))
 
+    scheduled_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of response generation"))
     answered_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of response generation"))
     processed_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of processing completion"))
 
