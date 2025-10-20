@@ -197,6 +197,7 @@ class AIResponseSerializer(serializers.ModelSerializer):
             "exception",
             "scheduled_at",
             "processed_at",
+            "answered_at",
         ]
 
     def create(self, validated_data):
