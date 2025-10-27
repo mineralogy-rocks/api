@@ -2,7 +2,9 @@
 import numpy as np
 import pandas as pd
 from dal import autocomplete
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate
+from django.contrib.auth import login
+from django.contrib.auth import logout
 from django.db.models import Count
 from django.db.models import F
 from django.db.models import Q
@@ -10,7 +12,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
-from rest_framework.decorators import action, api_view
+from rest_framework.decorators import action
+from rest_framework.decorators import api_view
 from rest_framework.generics import get_object_or_404
 from rest_framework.mixins import ListModelMixin
 from rest_framework.mixins import RetrieveModelMixin
@@ -673,23 +676,25 @@ class RelationViewSet(RetrieveModelMixin, GenericViewSet):
         return Response(data, status=status.HTTP_200_OK)
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 def login_view(request):
-    user = authenticate(request, username=request.data.get('username'), password=request.data.get('password'))
+    user = authenticate(request, username=request.data.get("username"), password=request.data.get("password"))
     if user is not None:
         login(request, user)
-        return Response({'message': 'Login successful'}, status=status.HTTP_200_OK)
+        return Response({"message": "Login successful"}, status=status.HTTP_200_OK)
     else:
-        return Response({'message': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+        return Response({"message": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 def logout_view(request):
     logout(request)
-    return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
+    return Response({"message": "Logout successful"}, status=status.HTTP_200_OK)
 
-@api_view(['GET'])
+
+@api_view(["GET"])
 def session_view(request):
     if request.user.is_authenticated:
-        return Response({'isAuthenticated': True, 'user': {'username': request.user.username}})
+        return Response({"isAuthenticated": True, "user": {"username": request.user.username}})
     else:
-        return Response({'isAuthenticated': False})
+        return Response({"isAuthenticated": False})
