@@ -34,9 +34,6 @@ class Component(BaseModel, Nameable):
 
 class Unit(BaseModel, Nameable):
     class Meta:
-        ordering = [
-            "name",
-        ]
         verbose_name = "Unit"
         verbose_name_plural = "Units"
 
@@ -162,14 +159,15 @@ class Queue(BaseModel, Creatable, Updatable):
 
     STATUS_QUEUED = 0
     STATUS_PARSED = 1
-    STATUS_AI_GENERATED = 2
-    STATUS_PROCESSED = 3
+    STATUS_AI_REQUESTED = 2
+    STATUS_AI_GENERATED = 3
+    STATUS_PROCESSED = 4
 
-    STATUS_PARSING_FAILED = 4
-    STATUS_AI_FAILED = 5
-    STATUS_PROCESSING_FAILED = 6
+    STATUS_PARSING_FAILED = 5
+    STATUS_AI_FAILED = 6
+    STATUS_PROCESSING_FAILED = 7
 
-    STATUS_ARCHIVED = 7
+    STATUS_ARCHIVED = 8
 
     STATUS_CHOICES = (
         (STATUS_QUEUED, _("Queued")),
@@ -402,6 +400,10 @@ class AIResponse(BaseModel, Creatable):
     scheduled_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of response generation"))
     answered_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of response generation"))
     processed_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of processing completion"))
+
+    prompt_tokens = models.IntegerField(null=True, blank=True, help_text=_("Number of tokens used in prompt"))
+    completion_tokens = models.IntegerField(null=True, blank=True, help_text=_("Number of tokens used in completion"))
+    total_tokens = models.IntegerField(null=True, blank=True, help_text=_("Total number of tokens used"))
 
     chunks = models.ManyToManyField(Chunk, through="AIResponseChunk", related_name="ai_responses")
 

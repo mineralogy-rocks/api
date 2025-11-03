@@ -22,6 +22,7 @@ from .models import Chunk
 from .models import Component
 from .models import Prompt
 from .models import Queue
+from .models import Unit
 from .serializers import AIResponseSerializer
 from .serializers import BaseChunkSerializer
 from .serializers import ChunkIssueSerializer
@@ -30,6 +31,7 @@ from .serializers import ComponentSerializer
 from .serializers import PromptSerializer
 from .serializers import QueueSerializer
 from .serializers import QueueToProcessSerializer
+from .serializers import UnitSerializer
 
 
 class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
@@ -226,4 +228,17 @@ class ComponentViewSet(viewsets.ReadOnlyModelViewSet):
 
     queryset = Component.objects.all()
     serializer_class = ComponentSerializer
+    pagination_class = None
+
+
+class UnitViewSet(viewsets.ReadOnlyModelViewSet):
+    http_method_names = ["get"]
+
+    authentication_classes = [authentication.SessionAuthentication, JWTAuthentication]
+    permission_classes = [
+        # permissions.IsAuthenticated,
+    ]
+
+    queryset = Unit.objects.all()
+    serializer_class = UnitSerializer
     pagination_class = None

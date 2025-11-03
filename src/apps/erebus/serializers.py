@@ -10,6 +10,7 @@ from .models import CodeVersion
 from .models import Component
 from .models import Prompt
 from .models import Queue
+from .models import Unit
 
 
 class BaseChunkSerializer(serializers.ModelSerializer):
@@ -198,6 +199,9 @@ class AIResponseSerializer(serializers.ModelSerializer):
             "scheduled_at",
             "processed_at",
             "answered_at",
+            "prompt_tokens",
+            "completion_tokens",
+            "total_tokens",
         ]
 
     def create(self, validated_data):
@@ -225,4 +229,13 @@ class ComponentSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "is_major",
+        ]
+
+
+class UnitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Unit
+        fields = [
+            "id",
+            "name",
         ]
