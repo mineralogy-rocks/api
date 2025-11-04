@@ -172,6 +172,7 @@ class Queue(BaseModel, Creatable, Updatable):
     STATUS_CHOICES = (
         (STATUS_QUEUED, _("Queued")),
         (STATUS_PARSED, _("Parsed")),
+        (STATUS_AI_REQUESTED, _("AI Requested")),
         (STATUS_AI_GENERATED, _("AI Response(s) Generated")),
         (STATUS_PROCESSED, _("Processed")),
         (STATUS_PARSING_FAILED, _("Parsing Failed")),
