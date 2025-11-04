@@ -381,8 +381,12 @@ class Prompt(BaseModel, Creatable):
 
 class AIResponse(BaseModel, Creatable):
     MODEL_GPT_5_NANO = "gpt-5-nano"
+    MODEL_GPT_5_MINI = "gpt-5-mini"
 
-    MODEL_CHOICES = ((MODEL_GPT_5_NANO, _("GPT-5 Nano")),)
+    MODEL_CHOICES = (
+        (MODEL_GPT_5_NANO, _("GPT-5 Nano")),
+        (MODEL_GPT_5_MINI, _("GPT-5 Mini")),
+    )
 
     hash = models.CharField(max_length=21, null=True, help_text=_("Hash of the chunk"))
 
