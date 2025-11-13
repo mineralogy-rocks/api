@@ -360,17 +360,28 @@ class ChunkIssue(BaseModel, Creatable):
         super().save(*args, **kwargs)
 
 
+class PromptTag(BaseModel):
+    key = models.CharField(max_length=200, null=False, unique=True)
+    value = models.CharField(max_length=200, null=False)
+
+    class Meta:
+        verbose_name = "Prompt Tag"
+        verbose_name_plural = "Prompt Tags"
+
+
+class PromptType(BaseModel, Nameable):
+    tags = models.ManyToManyField(PromptTag)
+
+    class Meta:
+        verbose_name = "Prompt Tag"
+        verbose_name_plural = "Prompt Tags"
+
+
 class Prompt(BaseModel, Creatable):
-    PROMPT_COMPOSITION = 0
-    PROMPT_METADATA = 1
+    openai_id = models.CharField(max_length=255, null=True)
 
-    PROMPT_CHOICES = (
-        (PROMPT_COMPOSITION, _("Prompt for composition extraction")),
-        (PROMPT_METADATA, _("Prompt for metadata extraction")),
-    )
-
-    text = models.TextField(blank=True, null=True, help_text=_("Prompt text"))
-    type = models.IntegerField(choices=PROMPT_CHOICES, null=False, help_text=_("Prompt type"))
+    text = models.TextField(blank=True, null=True)
+    type = models.ForeignKey(PromptType, null=True, on_delete=models.SET_NULL, related_name="prompts")
 
     class Meta:
         verbose_name = "Prompt"
@@ -381,7 +392,7 @@ class Prompt(BaseModel, Creatable):
 
 class AIResponse(BaseModel, Creatable):
     MODEL_GPT_5_NANO = "gpt-5-nano"
-    MODEL_GPT_5_MINI = "gpt-5-mini"
+    MODEL_GPT_5_MINI = "gpt-5-mini-2025-08-07"
 
     MODEL_CHOICES = (
         (MODEL_GPT_5_NANO, _("GPT-5 Nano")),
@@ -406,9 +417,9 @@ class AIResponse(BaseModel, Creatable):
     answered_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of response generation"))
     processed_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of processing completion"))
 
-    prompt_tokens = models.IntegerField(null=True, blank=True, help_text=_("Number of tokens used in prompt"))
-    completion_tokens = models.IntegerField(null=True, blank=True, help_text=_("Number of tokens used in completion"))
-    total_tokens = models.IntegerField(null=True, blank=True, help_text=_("Total number of tokens used"))
+    input_tokens = models.IntegerField(null=True, blank=True)
+    output_tokens = models.IntegerField(null=True, blank=True)
+    total_tokens = models.IntegerField(null=True, blank=True)
 
     chunks = models.ManyToManyField(Chunk, through="AIResponseChunk", related_name="ai_responses")
 

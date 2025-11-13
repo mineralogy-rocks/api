@@ -9,6 +9,8 @@ from .models import ChunkIssue
 from .models import CodeVersion
 from .models import Component
 from .models import Prompt
+from .models import PromptTag
+from .models import PromptType
 from .models import Queue
 from .models import Unit
 
@@ -199,8 +201,8 @@ class AIResponseSerializer(serializers.ModelSerializer):
             "scheduled_at",
             "processed_at",
             "answered_at",
-            "prompt_tokens",
-            "completion_tokens",
+            "input_tokens",
+            "output_tokens",
             "total_tokens",
         ]
 
@@ -211,11 +213,35 @@ class AIResponseSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
+class PromptTagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PromptTag
+        fields = [
+            "key",
+            "value",
+        ]
+
+
+class PromptTypeSerializer(serializers.ModelSerializer):
+    tags = PromptTagSerializer(many=True)
+
+    class Meta:
+        model = PromptType
+        fields = [
+            "id",
+            "name",
+            "tags",
+        ]
+
+
 class PromptSerializer(serializers.ModelSerializer):
+    type = PromptTypeSerializer()
+
     class Meta:
         model = Prompt
         fields = [
             "id",
+            "openai_id",
             "text",
             "type",
             "created_at",
