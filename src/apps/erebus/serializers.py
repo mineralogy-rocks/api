@@ -1,6 +1,12 @@
 # -*- coding: UTF-8 -*-
+import os
+import re
+import tempfile
+
+import pandas as pd
 from django.db import models
 from django.utils import timezone
+from markitdown import MarkItDown
 from rest_framework import serializers
 
 from .models import AIResponse
@@ -75,6 +81,7 @@ class QueueSerializer(serializers.ModelSerializer):
             "description",
             "status",
             "file",
+            "markdown",
             "size",
             "mime_type",
             "parsing_version",
@@ -93,6 +100,48 @@ class QueueSerializer(serializers.ModelSerializer):
                 f"Unsupported file format. Allowed formats: {', '.join(Queue.ALLOWED_EXTENSIONS)}"
             )
         return file
+
+    def create(self, validated_data):
+        file_obj = validated_data.get("file")
+
+        if file_obj:
+            file_extension = os.path.splitext(file_obj.name)[1].lower()
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension, mode="wb") as tmp_file:
+                file_obj.seek(0)
+                file_content = file_obj.read()
+                tmp_file.write(file_content)
+                tmp_file_path = tmp_file.name
+
+            file_obj.seek(0)
+
+            markdown_content = ""
+
+            if file_extension in [".xls", ".xlsx", ".csv"]:
+                if file_extension == ".csv":
+                    df = pd.read_csv(tmp_file_path, on_bad_lines="skip")
+                else:
+                    df = pd.read_excel(tmp_file_path)
+
+                df = df.fillna("")
+                markdown_content = df.to_markdown(index=False)
+            else:
+                md = MarkItDown()
+                result = md.convert(tmp_file_path)
+                markdown_content = result.text_content
+
+                markdown_content = re.sub(r"\bnan\b", "", markdown_content, flags=re.IGNORECASE)
+                markdown_content = re.sub(r"\b-?inf\b", "", markdown_content, flags=re.IGNORECASE)
+
+            markdown_content = re.sub(r" +", " ", markdown_content)
+            markdown_content = re.sub(r"\n\n+", "\n\n", markdown_content)
+
+            validated_data["markdown"] = markdown_content.strip()
+
+            if os.path.exists(tmp_file_path):
+                os.unlink(tmp_file_path)
+
+        return super().create(validated_data)
 
     @staticmethod
     def setup_eager_loading(**kwargs):
@@ -128,6 +177,7 @@ class QueueToProcessSerializer(serializers.ModelSerializer):
             "file",
             "size",
             "mime_type",
+            "markdown",
             "parsing_version",
             "chunks",
         ]

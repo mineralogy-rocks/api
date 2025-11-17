@@ -212,6 +212,7 @@ class Queue(BaseModel, Creatable, Updatable):
         null=False,
         help_text=_("File stored in S3"),
     )
+    markdown = models.TextField(null=True, blank=True)
 
     size = models.PositiveIntegerField(null=True, help_text=_("File size in bytes"))
     mime_type = models.CharField(max_length=200, null=True, blank=True, help_text=_("File MIME type"))
