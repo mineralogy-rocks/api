@@ -8,9 +8,7 @@ from core.models.base import Nameable
 from core.models.base import Updatable
 from core.models.mineral import Mineral
 from django.contrib.auth import get_user_model
-from django.core.files.storage import default_storage
 from django.db import models
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from .utils import ErebusStorage
@@ -154,24 +152,22 @@ class MeasurementComponents(BaseModel):
 class Queue(BaseModel, Creatable, Updatable):
     # TODO: add project/space field
 
-    ALLOWED_EXTENSIONS = ["csv", "xls", "xlsx"]
+    ALLOWED_EXTENSIONS = ["csv", "xls", "xlsx", "pdf"]
     MAX_SIZE_ALLOWED = 1024 * 1024 * 10
 
     STATUS_QUEUED = 0
-    STATUS_PARSED = 1
-    STATUS_AI_REQUESTED = 2
-    STATUS_AI_GENERATED = 3
-    STATUS_PROCESSED = 4
+    STATUS_AI_REQUESTED = 1
+    STATUS_AI_GENERATED = 2
+    STATUS_PROCESSED = 3
 
-    STATUS_PARSING_FAILED = 5
-    STATUS_AI_FAILED = 6
-    STATUS_PROCESSING_FAILED = 7
+    STATUS_PARSING_FAILED = 4
+    STATUS_AI_FAILED = 5
+    STATUS_PROCESSING_FAILED = 6
 
-    STATUS_ARCHIVED = 8
+    STATUS_ARCHIVED = 7
 
     STATUS_CHOICES = (
         (STATUS_QUEUED, _("Queued")),
-        (STATUS_PARSED, _("Parsed")),
         (STATUS_AI_REQUESTED, _("AI Requested")),
         (STATUS_AI_GENERATED, _("AI Response(s) Generated")),
         (STATUS_PROCESSED, _("Processed")),
@@ -192,6 +188,7 @@ class Queue(BaseModel, Creatable, Updatable):
     )
 
     uuid = models.UUIDField(default=uuid.uuid4, unique=True)
+    hash = models.CharField(max_length=21, null=True)
 
     owner = models.ForeignKey(
         get_user_model(),
@@ -224,10 +221,12 @@ class Queue(BaseModel, Creatable, Updatable):
         choices=ACCESS_CHOICES, default=ACCESS_FULL_PUBLIC, null=False, help_text=_("Access level")
     )
 
-    parsed_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of parsing completion"))
     ai_generated_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of AI response generation"))
     processed_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of processing completion"))
     archived_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of archiving"))
+
+    extract_composition = models.BooleanField(default=True)
+    extract_metadata = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = "File Queue"
@@ -246,29 +245,14 @@ class Queue(BaseModel, Creatable, Updatable):
         except Exception:
             pass
         self.size = self.file.size
+        if not self.hash:
+            self.hash = _create_hash(12)
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
         self.status = self.STATUS_ARCHIVED
         self.save()
         return self
-
-    @property
-    def get_unprocessed_url(self):
-        return default_storage.url(f"{self.uuid}/unprocessed/")
-
-    @property
-    def get_parsed_url(self):
-        if self.status in [self.STATUS_PROCESSED, self.STATUS_PARSED] and self.chunks.exists():
-            _max_version = self.chunks.aggregate(ver=models.Max("version"))["ver"]
-            return default_storage.url(f"{self.uuid}/{_max_version}/parsed/")
-        return None
-
-    @property
-    def parsing_version(self):
-        if self.chunks:
-            return self.chunks.order_by("-version").first().version
-        return 0
 
 
 class CodeVersion(BaseModel, Creatable):
@@ -293,72 +277,6 @@ class CodeVersion(BaseModel, Creatable):
         self.major = major
         self.minor = minor
         self.patch = patch
-
-
-class Chunk(BaseModel, Creatable):
-    hash = models.CharField(max_length=21, null=True, help_text=_("Hash of the chunk"))
-
-    parent = models.ForeignKey(
-        Queue, on_delete=models.CASCADE, null=False, related_name="chunks", help_text=_("Parent file of the chunk")
-    )
-    code_version = models.ForeignKey(
-        CodeVersion, on_delete=models.SET_NULL, null=True, help_text=_("Code version used for processing")
-    )
-    version = models.IntegerField(default=1, help_text=_("Version of the chunk"))
-
-    data = models.JSONField(null=True, help_text=_("Raw data from the chunk"))
-
-    extract_composition = models.BooleanField(
-        default=True, help_text=_("Flag to indicate if the chunk should be used for extracting composition")
-    )
-    extract_metadata = models.BooleanField(
-        default=True, help_text=_("Flag to indicate if the chunk should be used for extracting metadata")
-    )
-
-    class Meta:
-        verbose_name = "Chunk"
-        verbose_name_plural = "Chunks"
-        ordering = ["-created_at"]
-        get_latest_by = ["-created_at"]
-
-    def __str__(self):
-        return self.hash
-
-    def save(self, *args, **kwargs):
-        if not self.hash:
-            self.hash = _create_hash(12)
-        super().save(*args, **kwargs)
-
-
-class ChunkIssue(BaseModel, Creatable):
-    chunk = models.ForeignKey(Chunk, on_delete=models.CASCADE, null=False, related_name="issues")
-
-    name = models.CharField(max_length=100, null=False, help_text=_("Issue name"))
-    comment = models.TextField(null=False, help_text=_("Description"))
-
-    email = models.EmailField(null=False, help_text=_("Email address of the reporter"))
-    user = models.ForeignKey(
-        get_user_model(),
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        default=None,
-        help_text=_("User who reported the issue"),
-    )
-
-    is_resolved = models.BooleanField(default=False, help_text=_("Flag to indicate if the issue has been resolved"))
-    resolved_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of resolution"))
-
-    class Meta:
-        verbose_name = "Chunk Issue"
-        verbose_name_plural = "Chunk Issues"
-        ordering = ["-created_at"]
-        get_latest_by = ["-created_at"]
-
-    def save(self, *args, **kwargs):
-        if self.is_resolved:
-            self.resolved_at = timezone.now()
-        super().save(*args, **kwargs)
 
 
 class PromptTag(BaseModel):
@@ -422,8 +340,6 @@ class AIResponse(BaseModel, Creatable):
     output_tokens = models.IntegerField(null=True, blank=True)
     total_tokens = models.IntegerField(null=True, blank=True)
 
-    chunks = models.ManyToManyField(Chunk, through="AIResponseChunk", related_name="ai_responses")
-
     class Meta:
         verbose_name = "AI Response"
         verbose_name_plural = "AI Responses"
@@ -437,28 +353,3 @@ class AIResponse(BaseModel, Creatable):
         if not self.hash:
             self.hash = _create_hash(12)
         super().save(*args, **kwargs)
-
-
-class AIResponseChunk(BaseModel):
-    ai_response = models.ForeignKey(
-        AIResponse,
-        on_delete=models.CASCADE,
-        null=False,
-        related_name="chunk_associations",
-        help_text=_("AI response"),
-    )
-    chunk = models.ForeignKey(
-        Chunk,
-        on_delete=models.CASCADE,
-        null=False,
-        related_name="response_associations",
-        help_text=_("Chunk used in AI response"),
-    )
-
-    class Meta:
-        verbose_name = "AI Response Chunk"
-        verbose_name_plural = "AI Response Chunks"
-        ordering = [
-            "-id",
-        ]
-        unique_together = ["ai_response", "chunk"]

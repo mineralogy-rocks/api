@@ -1,6 +1,5 @@
 # -*- coding: UTF-8 -*-
 
-from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import authentication
 from rest_framework import filters
@@ -13,20 +12,15 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from .filters import ChunkFilter
 from .filters import PromptFilter
 from .filters import QueueFilter
 from .mixins import CodeVersionMixin
 from .models import AIResponse
-from .models import Chunk
 from .models import Component
 from .models import Prompt
 from .models import Queue
 from .models import Unit
 from .serializers import AIResponseSerializer
-from .serializers import BaseChunkSerializer
-from .serializers import ChunkIssueSerializer
-from .serializers import ChunkSerializer
 from .serializers import ComponentSerializer
 from .serializers import PromptSerializer
 from .serializers import QueueSerializer
@@ -60,11 +54,7 @@ class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
         return queryset
 
     def get_serializer_class(self):
-        if self.action in ["add_chunk"]:
-            return ChunkSerializer
-        elif self.action in ["add_issue"]:
-            return ChunkIssueSerializer
-        elif self.action in ["awaiting_processing"]:
+        if self.action in ["awaiting_processing"]:
             return QueueToProcessSerializer
         return super().get_serializer_class()
 
@@ -73,109 +63,9 @@ class QueueViewSet(CodeVersionMixin, viewsets.ModelViewSet):
             serializer.save(user=self.request.user)
         super().perform_create(serializer)
 
-    @action(detail=True, methods=["get"])
-    def chunks(self, request, uuid=None):
-        queue = self.get_object()
-        serializer = ChunkSerializer(queue.chunks.all(), many=True)
-        return Response(serializer.data)
-
-    @action(detail=True, methods=["post"], url_path="add-chunk")
-    def add_chunk(self, request, uuid=None):
-        queue = self.get_object()
-        _data = request.data.copy()
-        code_version = self.generate_code_version()
-        if code_version:
-            _data["code_version"] = code_version.id
-
-        serializer = self.get_serializer(data=_data)
-        serializer.is_valid(raise_exception=True)
-
-        chunk = serializer.save(parent=queue)
-        return Response(ChunkSerializer(chunk).data, status=status.HTTP_201_CREATED)
-
-    @action(detail=True, methods=["get"], url_path=r"(?P<chunk_id>\d+)")
-    def get_chunk(self, request, uuid=None, chunk_id=None):
-        queue = self.get_object()
-        try:
-            chunk = queue.chunks.get(id=chunk_id)
-            serializer = ChunkSerializer(chunk)
-            return Response(serializer.data)
-        except Chunk.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-
-    @action(detail=True, methods=["post"], url_path=r"(?P<chunk_id>\d+)/add-issue")
-    def add_issue(self, request, uuid=None, chunk_id=None):
-        queue = self.get_object()
-        try:
-            chunk = queue.chunks.get(id=chunk_id)
-            serializer = self.get_serializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-
-            issue = serializer.save(chunk=chunk)
-            return Response(ChunkIssueSerializer(issue).data, status=status.HTTP_201_CREATED)
-        except Chunk.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-
     @action(detail=False, methods=["get"], url_path="awaiting-processing")
     def awaiting_processing(self, request):
         return super().list(request)
-
-
-class ChunkViewSet(viewsets.ReadOnlyModelViewSet):
-    http_method_names = ["get"]
-    authentication_classes = [authentication.SessionAuthentication, JWTAuthentication]
-    queryset = Chunk.objects.all()
-    permission_classes = [
-        # permissions.IsAuthenticated,
-    ]
-
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-
-    filterset_class = ChunkFilter
-
-    def get_serializer_class(self):
-        if self.action in ["list", "awaiting_processing"]:
-            return BaseChunkSerializer
-        return ChunkSerializer
-
-    def get_object(self):
-        lookup_value = self.kwargs[self.lookup_field]
-
-        try:
-            if lookup_value.isdigit():
-                return self.get_queryset().get(id=lookup_value)
-            else:
-                return self.get_queryset().get(hash=lookup_value)
-        except Chunk.DoesNotExist:
-            return super().get_object()
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        queryset = queryset.select_related("parent", "code_version")
-        return queryset
-
-    @action(detail=False, methods=["get"], url_path="awaiting-processing")
-    def awaiting_processing(self, request):
-        _queues = Queue.objects.filter(status=Queue.STATUS_PARSED)
-
-        _chunk_ids = []
-        for _queue in _queues:
-            _latest_version = _queue.chunks.order_by("-version").first()
-            if _latest_version:
-                _chunk_ids += _queue.chunks.filter(
-                    Q(version=_latest_version.version) & (Q(extract_composition=1) | Q(extract_metadata=1))
-                ).values_list("id", flat=True)
-
-        queryset = Chunk.objects.filter(id__in=_chunk_ids)
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer_class = self.get_serializer_class()
-            serializer = serializer_class(page, context={"request": request}, many=True)
-            return self.get_paginated_response(serializer.data)
-
-        serializer_class = self.get_serializer_class()
-        serializer = serializer_class(queryset, context={"request": request}, many=True)
-        return Response(serializer.data)
 
 
 class PromptViewSet(viewsets.ReadOnlyModelViewSet):

@@ -8,8 +8,6 @@ from django.utils.safestring import mark_safe
 from .forms import PromptForm
 from .forms import QueueForm
 from .models import AIResponse
-from .models import Chunk
-from .models import ChunkIssue
 from .models import Prompt
 from .models import Queue
 
@@ -24,29 +22,9 @@ def schedule_processing(modeladmin, request, queryset):
     queryset.update(status=Queue.STATUS_QUEUED)
 
 
-class ChunkInline(admin.TabularInline):
-    model = Chunk
-    extra = 0
-    fields = ["hash", "version", "extract_composition", "extract_metadata", "created_at", "responses_count"]
-    readonly_fields = [
-        "hash",
-        "version",
-        "created_at",
-        "responses_count",
-    ]
-    can_delete = False
-    show_change_link = True
-
-    def responses_count(self, obj):
-        return obj.responses.count()
-
-    responses_count.short_description = "Responses"
-
-
 @admin.register(Queue)
 class QueueAdmin(admin.ModelAdmin):
     form = QueueForm
-    inlines = [ChunkInline]
 
     list_display = [
         "id",
@@ -55,7 +33,6 @@ class QueueAdmin(admin.ModelAdmin):
         "size_display",
         "mime_type",
         "status_display",
-        "chunks_nr_display",
         "link",
     ]
 
@@ -80,9 +57,6 @@ class QueueAdmin(admin.ModelAdmin):
 
     def link(self, obj):
         return format_html('<a href="{}" target="_blank">Download</a>', obj.get_absolute_url())
-
-    def chunks_nr_display(self, obj):
-        return obj.chunks.count()
 
     def size_display(self, obj):
         if obj.size:
@@ -121,56 +95,6 @@ def mark_not_approved(modeladmin, request, queryset):
     queryset.update(extract_composition=False, extract_metadata=False)
 
 
-@admin.register(Chunk)
-class ChunkAdmin(admin.ModelAdmin):
-    list_display = [
-        "id",
-        "hash",
-        "parent",
-        "version",
-        "extract_composition",
-        "extract_metadata",
-        "_code_version",
-        "created_at",
-        "responses_count",
-    ]
-
-    list_display_links = [
-        "hash",
-    ]
-
-    list_filter = [
-        "extract_composition",
-        "extract_metadata",
-        "version",
-        "parent",
-    ]
-
-    search_fields = [
-        "hash",
-        "parent__name",
-    ]
-
-    readonly_fields = [
-        "created_at",
-        "_code_version",
-    ]
-
-    actions = [
-        mark_approved,
-        mark_not_approved,
-    ]
-
-    def _code_version(self, obj):
-        return obj.code_version.version if obj.code_version else None
-
-    def responses_count(self, obj):
-        return obj.responses.count()
-
-    _code_version.short_description = "Code version"
-    responses_count.short_description = "Responses"
-
-
 @admin.action(description="Mark as resolved")
 def mark_resolved(modeladmin, request, queryset):
     queryset.update(is_resolved=True)
@@ -179,47 +103,6 @@ def mark_resolved(modeladmin, request, queryset):
 @admin.action(description="Mark as unresolved")
 def mark_unresolved(modeladmin, request, queryset):
     queryset.update(is_resolved=False)
-
-
-@admin.register(ChunkIssue)
-class ChunkIssueAdmin(admin.ModelAdmin):
-    list_display = [
-        "id",
-        "name",
-        "chunk",
-        "email",
-        "user",
-        "is_resolved",
-        "created_at",
-        "resolved_at",
-    ]
-
-    list_display_links = [
-        "name",
-    ]
-
-    list_filter = [
-        "is_resolved",
-        "chunk",
-        "user",
-    ]
-
-    search_fields = [
-        "name",
-        "comment",
-        "email",
-        "chunk__name",
-    ]
-
-    readonly_fields = [
-        "created_at",
-        "resolved_at",
-    ]
-
-    actions = [
-        mark_resolved,
-        mark_unresolved,
-    ]
 
 
 @admin.register(Prompt)
