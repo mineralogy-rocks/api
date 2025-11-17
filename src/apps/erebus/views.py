@@ -104,7 +104,7 @@ class AIResponseViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        queryset = queryset.select_related("queue", "prompt").prefetch_related("chunks")
+        queryset = queryset.select_related("queue", "prompt")
         return queryset
 
 
