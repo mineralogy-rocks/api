@@ -150,8 +150,6 @@ class MeasurementComponents(BaseModel):
 
 
 class Queue(BaseModel, Creatable, Updatable):
-    # TODO: add project/space field
-
     ALLOWED_EXTENSIONS = ["csv", "xls", "xlsx", "pdf"]
     MAX_SIZE_ALLOWED = 1024 * 1024 * 10
 
@@ -197,6 +195,15 @@ class Queue(BaseModel, Creatable, Updatable):
         blank=True,
         default=None,
         help_text=_("Owner of the file"),
+    )
+    space = models.ForeignKey(
+        "users.Space",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        default=None,
+        related_name="queues",
+        help_text=_("Space associated with the file"),
     )
 
     name = models.CharField(max_length=1000, null=False, help_text=_("File name"))

@@ -1,4 +1,8 @@
 # -*- coding: UTF-8 -*-
+from core.models.base import BaseModel
+from core.models.base import Creatable
+from core.models.base import Nameable
+from core.models.base import Updatable
 from django.contrib.auth.models import AbstractBaseUser
 from django.contrib.auth.models import BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
@@ -105,3 +109,79 @@ class User(PermissionsMixin, AbstractBaseUser):
 
     def email_user(self, subject, message, from_email=None, **kwargs):
         send_mail(subject, message, from_email, [self.email], **kwargs)
+
+
+class SpaceTag(BaseModel, Nameable):
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "Space Tag"
+        verbose_name_plural = "Space Tags"
+
+
+class Space(BaseModel, Nameable, Creatable, Updatable):
+    ACCESS_FULL_PUBLIC = 0
+    ACCESS_SEMI_PUBLIC = 1
+    ACCESS_PRIVATE = 2
+
+    ACCESS_CHOICES = (
+        (ACCESS_FULL_PUBLIC, _("Full Public")),
+        (ACCESS_SEMI_PUBLIC, _("Semi Public")),
+        (ACCESS_PRIVATE, _("Private")),
+    )
+
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="owned_spaces",
+    )
+    description = models.TextField(null=True, blank=True)
+    access = models.IntegerField(
+        choices=ACCESS_CHOICES,
+        default=ACCESS_FULL_PUBLIC,
+        null=False,
+    )
+    tags = models.ManyToManyField(SpaceTag, related_name="spaces", blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Space"
+        verbose_name_plural = "Spaces"
+
+    def __str__(self):
+        return self.name
+
+
+class SpaceCollaborator(BaseModel, Creatable):
+    PERMISSION_VIEWER = 0
+    PERMISSION_ADMIN = 1
+    PERMISSION_SUPERADMIN = 2
+
+    PERMISSION_CHOICES = (
+        (PERMISSION_VIEWER, _("Viewer")),
+        (PERMISSION_ADMIN, _("Admin")),
+        (PERMISSION_SUPERADMIN, _("Superadmin")),
+    )
+
+    space = models.ForeignKey(
+        Space,
+        on_delete=models.CASCADE,
+        related_name="collaborators",
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="space_collaborations",
+    )
+    permission_level = models.IntegerField(
+        choices=PERMISSION_CHOICES,
+        null=False,
+    )
+
+    class Meta:
+        unique_together = ["space", "user"]
+        ordering = ["-created_at"]
+        verbose_name = "Space Collaborator"
+        verbose_name_plural = "Space Collaborators"
+
+    def __str__(self):
+        return f"{self.user.email} - {self.space.name} ({self.get_permission_level_display()})"
