@@ -171,17 +171,42 @@ class SpaceCollaborator(BaseModel, Creatable):
         User,
         on_delete=models.CASCADE,
         related_name="space_collaborations",
+        null=True,
+        blank=True,
     )
     permission_level = models.IntegerField(
         choices=PERMISSION_CHOICES,
         null=False,
     )
 
+    is_pending = models.BooleanField(default=True)
+    is_accepted = models.BooleanField(null=True, blank=True, default=None)
+    is_revoked = models.BooleanField(default=False)
+    invitation_token = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    invitation_sent_at = models.DateTimeField(null=True, blank=True)
+    invitation_expires_at = models.DateTimeField(null=True, blank=True)
+    invited_email = models.EmailField(null=True, blank=True)
+    invited_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name="sent_invitations",
+        null=True,
+        blank=True,
+    )
+
     class Meta:
-        unique_together = ["space", "user"]
         ordering = ["-created_at"]
         verbose_name = "Space Collaborator"
         verbose_name_plural = "Space Collaborators"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["space", "user"],
+                condition=models.Q(is_accepted=True),
+                name="unique_accepted_collaborator",
+            )
+        ]
 
     def __str__(self):
-        return f"{self.user.email} - {self.space.name} ({self.get_permission_level_display()})"
+        email = self.user.email if self.user else self.invited_email
+        status = "Pending" if self.is_pending else "Accepted"
+        return f"{email} - {self.space.name} ({self.get_permission_level_display()}) - {status}"

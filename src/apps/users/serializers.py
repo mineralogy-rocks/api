@@ -1,4 +1,5 @@
 # -*- coding: UTF-8 -*-
+from django.utils import timezone
 from rest_framework import serializers
 
 from users.models import Space
@@ -55,6 +56,7 @@ class SpaceCollaboratorSerializer(serializers.ModelSerializer):
         queryset=User.objects.all(),
         source="user",
         write_only=True,
+        required=False,
     )
     permission_level_display = serializers.CharField(
         source="get_permission_level_display",
@@ -69,9 +71,24 @@ class SpaceCollaboratorSerializer(serializers.ModelSerializer):
             "user_id",
             "permission_level",
             "permission_level_display",
+            "is_pending",
+            "is_accepted",
+            "is_revoked",
+            "invited_email",
+            "invitation_sent_at",
+            "invitation_expires_at",
             "created_at",
         ]
-        read_only_fields = ["id", "created_at"]
+        read_only_fields = [
+            "id",
+            "is_pending",
+            "is_accepted",
+            "is_revoked",
+            "invited_email",
+            "invitation_sent_at",
+            "invitation_expires_at",
+            "created_at",
+        ]
 
     @staticmethod
     def setup_eager_loading(queryset):
@@ -130,7 +147,7 @@ class SpaceCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Space
-        fields = ["name", "description", "access", "tag_ids"]
+        fields = ["id", "name", "description", "access", "tag_ids"]
 
     def create(self, validated_data):
         validated_data["owner"] = self.context["request"].user
@@ -147,4 +164,106 @@ class SpaceUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Space
-        fields = ["name", "description", "access", "tag_ids"]
+        fields = ["id", "name", "description", "access", "tag_ids"]
+
+
+class SpaceInvitationSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    permission_level = serializers.IntegerField(required=True)
+
+    def validate_permission_level(self, value):
+        from users.models import SpaceCollaborator
+
+        valid_levels = [
+            SpaceCollaborator.PERMISSION_VIEWER,
+            SpaceCollaborator.PERMISSION_ADMIN,
+            SpaceCollaborator.PERMISSION_SUPERADMIN,
+        ]
+        if value not in valid_levels:
+            raise serializers.ValidationError("Invalid permission level")
+        return value
+
+
+class PendingInvitationSerializer(serializers.ModelSerializer):
+    space_name = serializers.CharField(source="space.name", read_only=True)
+    space_id = serializers.IntegerField(source="space.id", read_only=True)
+    space_description = serializers.CharField(source="space.description", read_only=True)
+    inviter_name = serializers.SerializerMethodField()
+    permission_level_display = serializers.CharField(
+        source="get_permission_level_display",
+        read_only=True,
+    )
+
+    class Meta:
+        model = SpaceCollaborator
+        fields = [
+            "id",
+            "space_id",
+            "space_name",
+            "space_description",
+            "inviter_name",
+            "permission_level",
+            "permission_level_display",
+            "invitation_sent_at",
+            "invitation_expires_at",
+        ]
+
+    def get_inviter_name(self, obj):
+        inviter = obj.space.owner
+        return inviter.get_full_name() or inviter.username or inviter.email
+
+
+class InvitationResponseSerializer(serializers.Serializer):
+    token = serializers.CharField(required=True)
+
+
+class SentInvitationSerializer(serializers.ModelSerializer):
+    space_name = serializers.CharField(source="space.name", read_only=True)
+    space_id = serializers.IntegerField(source="space.id", read_only=True)
+    invitee_email = serializers.SerializerMethodField()
+    invitee_name = serializers.SerializerMethodField()
+    permission_level_display = serializers.CharField(
+        source="get_permission_level_display",
+        read_only=True,
+    )
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SpaceCollaborator
+        fields = [
+            "id",
+            "space_id",
+            "space_name",
+            "invitee_email",
+            "invitee_name",
+            "permission_level",
+            "permission_level_display",
+            "is_pending",
+            "is_accepted",
+            "is_revoked",
+            "status",
+            "invitation_sent_at",
+            "invitation_expires_at",
+            "created_at",
+        ]
+
+    def get_invitee_email(self, obj):
+        return obj.invited_email or (obj.user.email if obj.user else None)
+
+    def get_invitee_name(self, obj):
+        if obj.user:
+            return obj.user.get_full_name() or obj.user.username or obj.user.email
+        return obj.invited_email
+
+    def get_status(self, obj):
+        if obj.is_revoked:
+            return "Revoked"
+        elif obj.is_accepted:
+            return "Accepted"
+        elif obj.is_accepted is False:
+            return "Declined"
+        elif obj.is_pending:
+            if obj.invitation_expires_at and obj.invitation_expires_at < timezone.now():
+                return "Expired"
+            return "Pending"
+        return "Unknown"

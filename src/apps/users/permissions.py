@@ -15,7 +15,13 @@ class IsSpaceOwnerOrCollaborator(permissions.BasePermission):
             return True
 
         try:
-            collaborator = SpaceCollaborator.objects.get(space=obj, user=user)
+            collaborator = SpaceCollaborator.objects.get(
+                space=obj,
+                user=user,
+                is_pending=False,
+                is_accepted=True,
+                is_revoked=False,
+            )
         except SpaceCollaborator.DoesNotExist:
             return False
 
@@ -29,7 +35,12 @@ class IsSpaceOwnerOrCollaborator(permissions.BasePermission):
             return True
 
         if collaborator.permission_level == SpaceCollaborator.PERMISSION_ADMIN:
-            if view.action in ["update", "partial_update", "add_collaborator", "remove_collaborator"]:
+            if view.action in [
+                "update",
+                "partial_update",
+                "invite_collaborator",
+                "remove_collaborator",
+            ]:
                 return True
 
         return False
