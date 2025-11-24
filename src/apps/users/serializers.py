@@ -95,6 +95,66 @@ class SpaceCollaboratorSerializer(serializers.ModelSerializer):
         return queryset.select_related("user")
 
 
+class CollaboratorListSerializer(serializers.ModelSerializer):
+    user = UserBasicSerializer(read_only=True)
+    invited_by = UserBasicSerializer(read_only=True)
+    permission_level_display = serializers.CharField(
+        source="get_permission_level_display",
+        read_only=True,
+    )
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SpaceCollaborator
+        fields = [
+            "id",
+            "user",
+            "permission_level",
+            "permission_level_display",
+            "is_pending",
+            "is_accepted",
+            "is_revoked",
+            "invited_email",
+            "invited_by",
+            "invitation_sent_at",
+            "invitation_expires_at",
+            "status",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "user",
+            "permission_level",
+            "permission_level_display",
+            "is_pending",
+            "is_accepted",
+            "is_revoked",
+            "invited_email",
+            "invited_by",
+            "invitation_sent_at",
+            "invitation_expires_at",
+            "status",
+            "created_at",
+        ]
+
+    def get_status(self, obj):
+        if obj.is_revoked:
+            return "Revoked"
+        elif obj.is_accepted:
+            return "Active"
+        elif obj.is_accepted is False:
+            return "Declined"
+        elif obj.is_pending:
+            if obj.invitation_expires_at and obj.invitation_expires_at < timezone.now():
+                return "Expired"
+            return "Pending"
+        return "Unknown"
+
+    @staticmethod
+    def setup_eager_loading(queryset):
+        return queryset.select_related("user", "invited_by")
+
+
 class SpaceSerializer(serializers.ModelSerializer):
     owner = UserBasicSerializer(read_only=True)
     collaborators = SpaceCollaboratorSerializer(many=True, read_only=True)
@@ -107,6 +167,7 @@ class SpaceSerializer(serializers.ModelSerializer):
         required=False,
     )
     access_display = serializers.CharField(source="get_access_display", read_only=True)
+    is_owner = serializers.SerializerMethodField()
 
     class Meta:
         model = Space
@@ -114,6 +175,7 @@ class SpaceSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "description",
+            "is_owner",
             "owner",
             "access",
             "access_display",
@@ -124,6 +186,12 @@ class SpaceSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "owner", "created_at", "updated_at"]
+
+    def get_is_owner(self, obj):
+        request = self.context.get("request")
+        if request and request.user:
+            return obj.owner == request.user
+        return False
 
     @staticmethod
     def setup_eager_loading(queryset):
@@ -184,86 +252,5 @@ class SpaceInvitationSerializer(serializers.Serializer):
         return value
 
 
-class PendingInvitationSerializer(serializers.ModelSerializer):
-    space_name = serializers.CharField(source="space.name", read_only=True)
-    space_id = serializers.IntegerField(source="space.id", read_only=True)
-    space_description = serializers.CharField(source="space.description", read_only=True)
-    inviter_name = serializers.SerializerMethodField()
-    permission_level_display = serializers.CharField(
-        source="get_permission_level_display",
-        read_only=True,
-    )
-
-    class Meta:
-        model = SpaceCollaborator
-        fields = [
-            "id",
-            "space_id",
-            "space_name",
-            "space_description",
-            "inviter_name",
-            "permission_level",
-            "permission_level_display",
-            "invitation_sent_at",
-            "invitation_expires_at",
-        ]
-
-    def get_inviter_name(self, obj):
-        inviter = obj.space.owner
-        return inviter.get_full_name() or inviter.username or inviter.email
-
-
 class InvitationResponseSerializer(serializers.Serializer):
     token = serializers.CharField(required=True)
-
-
-class SentInvitationSerializer(serializers.ModelSerializer):
-    space_name = serializers.CharField(source="space.name", read_only=True)
-    space_id = serializers.IntegerField(source="space.id", read_only=True)
-    invitee_email = serializers.SerializerMethodField()
-    invitee_name = serializers.SerializerMethodField()
-    permission_level_display = serializers.CharField(
-        source="get_permission_level_display",
-        read_only=True,
-    )
-    status = serializers.SerializerMethodField()
-
-    class Meta:
-        model = SpaceCollaborator
-        fields = [
-            "id",
-            "space_id",
-            "space_name",
-            "invitee_email",
-            "invitee_name",
-            "permission_level",
-            "permission_level_display",
-            "is_pending",
-            "is_accepted",
-            "is_revoked",
-            "status",
-            "invitation_sent_at",
-            "invitation_expires_at",
-            "created_at",
-        ]
-
-    def get_invitee_email(self, obj):
-        return obj.invited_email or (obj.user.email if obj.user else None)
-
-    def get_invitee_name(self, obj):
-        if obj.user:
-            return obj.user.get_full_name() or obj.user.username or obj.user.email
-        return obj.invited_email
-
-    def get_status(self, obj):
-        if obj.is_revoked:
-            return "Revoked"
-        elif obj.is_accepted:
-            return "Accepted"
-        elif obj.is_accepted is False:
-            return "Declined"
-        elif obj.is_pending:
-            if obj.invitation_expires_at and obj.invitation_expires_at < timezone.now():
-                return "Expired"
-            return "Pending"
-        return "Unknown"

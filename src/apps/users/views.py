@@ -21,9 +21,8 @@ from users.models import Space
 from users.models import SpaceCollaborator
 from users.models import User
 from users.permissions import IsSpaceOwnerOrCollaborator
+from users.serializers import CollaboratorListSerializer
 from users.serializers import InvitationResponseSerializer
-from users.serializers import PendingInvitationSerializer
-from users.serializers import SentInvitationSerializer
 from users.serializers import SpaceCollaboratorSerializer
 from users.serializers import SpaceCreateSerializer
 from users.serializers import SpaceInvitationSerializer
@@ -99,6 +98,9 @@ class SpaceViewSet(viewsets.ModelViewSet):
     authentication_classes = [SessionAuthentication]
     permission_classes = [IsAuthenticated, IsSpaceOwnerOrCollaborator]
 
+    REQUIRES_ADMIN = SpaceCollaborator.PERMISSION_ADMIN
+    REQUIRES_ANY_COLLABORATOR = SpaceCollaborator.PERMISSION_VIEWER
+
     def get_queryset(self):
         queryset = Space.objects.all()
         serializer_class = self.get_serializer_class()
@@ -114,6 +116,47 @@ class SpaceViewSet(viewsets.ModelViewSet):
         elif self.action in ["update", "partial_update"]:
             return SpaceUpdateSerializer
         return SpaceSerializer
+
+    def _check_space_permission(self, space, user, min_permission_level):
+        """
+        Check if user has sufficient permission level for a space.
+
+        Args:
+            space: Space instance to check permissions for
+            user: User instance to check
+            min_permission_level: Minimum required permission level (use class constants)
+
+        Returns:
+            tuple: (has_permission: bool, user_permission_level: int|None)
+                - has_permission: True if user is owner or has sufficient permission
+                - user_permission_level: The user's actual permission level, or None if owner
+
+        Usage:
+            Use this helper for additional permission checks beyond standard CRUD operations.
+            For standard CRUD, rely on IsSpaceOwnerOrCollaborator permission class.
+
+        Example:
+            has_permission, _ = self._check_space_permission(space, user, self.REQUIRES_ADMIN)
+            if not has_permission:
+                return Response({"detail": "..."}, status=status.HTTP_403_FORBIDDEN)
+        """
+        if space.owner == user:
+            return (True, None)
+
+        try:
+            user_collaboration = SpaceCollaborator.objects.get(
+                space=space,
+                user=user,
+                is_pending=False,
+                is_accepted=True,
+                is_revoked=False,
+            )
+            if user_collaboration.permission_level >= min_permission_level:
+                return (True, user_collaboration.permission_level)
+        except SpaceCollaborator.DoesNotExist:
+            pass
+
+        return (False, None)
 
     @action(detail=False, methods=["get"], url_path="my-spaces")
     def my_spaces(self, request):
@@ -131,7 +174,25 @@ class SpaceViewSet(viewsets.ModelViewSet):
         if hasattr(serializer_class, "setup_eager_loading"):
             spaces = serializer_class.setup_eager_loading(spaces)
 
-        serializer = SpaceSerializer(spaces, many=True)
+        serializer = SpaceSerializer(spaces, many=True, context={"request": request})
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path="collaborators")
+    def collaborators(self, request, pk=None):
+        space = self.get_object()
+        user = request.user
+
+        has_permission, _ = self._check_space_permission(space, user, self.REQUIRES_ADMIN)
+        if not has_permission:
+            return Response(
+                {"detail": "You do not have permission to view collaborators"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        collaborators = SpaceCollaborator.objects.filter(space=space)
+        collaborators = CollaboratorListSerializer.setup_eager_loading(collaborators)
+
+        serializer = CollaboratorListSerializer(collaborators, many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=["post"], url_path="invite-collaborator")
@@ -298,47 +359,11 @@ class SpaceViewSet(viewsets.ModelViewSet):
         space.owner = new_owner
         space.save()
 
-        serializer = SpaceSerializer(space)
+        serializer = SpaceSerializer(space, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class InvitationViewSet(viewsets.GenericViewSet):
-    @action(
-        detail=False,
-        methods=["get"],
-        permission_classes=[IsAuthenticated],
-        authentication_classes=[SessionAuthentication],
-    )
-    def pending(self, request):
-        user = request.user
-        invitations = SpaceCollaborator.objects.filter(
-            user=user,
-            is_pending=True,
-            is_accepted=None,
-        ).select_related("space", "space__owner")
-
-        serializer = PendingInvitationSerializer(invitations, many=True)
-        return Response(serializer.data)
-
-    @action(
-        detail=False,
-        methods=["get"],
-        permission_classes=[IsAuthenticated],
-        authentication_classes=[SessionAuthentication],
-    )
-    def sent(self, request):
-        user = request.user
-        invitations = (
-            SpaceCollaborator.objects.filter(
-                invited_by=user,
-            )
-            .select_related("space", "user")
-            .order_by("-invitation_sent_at")
-        )
-
-        serializer = SentInvitationSerializer(invitations, many=True)
-        return Response(serializer.data)
-
     @action(
         detail=False,
         methods=["post"],
@@ -392,67 +417,5 @@ class InvitationViewSet(viewsets.GenericViewSet):
 
         return Response(
             {"detail": "Invitation declined successfully"},
-            status=status.HTTP_200_OK,
-        )
-
-    @action(
-        detail=False,
-        methods=["post"],
-        permission_classes=[IsAuthenticated],
-        authentication_classes=[SessionAuthentication],
-    )
-    def revoke(self, request):
-        collaborator_id = request.data.get("collaborator_id")
-
-        if not collaborator_id:
-            return Response(
-                {"detail": "collaborator_id is required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            collaboration = SpaceCollaborator.objects.select_related("space", "invited_by").get(id=collaborator_id)
-        except SpaceCollaborator.DoesNotExist:
-            return Response(
-                {"detail": "Collaboration not found"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        user = request.user
-        space = collaboration.space
-
-        can_revoke = False
-        if space.owner == user:
-            can_revoke = True
-        else:
-            try:
-                user_collaboration = SpaceCollaborator.objects.get(
-                    space=space,
-                    user=user,
-                    is_pending=False,
-                    is_accepted=True,
-                    is_revoked=False,
-                )
-                if user_collaboration.permission_level in [
-                    SpaceCollaborator.PERMISSION_SUPERADMIN,
-                    SpaceCollaborator.PERMISSION_ADMIN,
-                ]:
-                    can_revoke = True
-                elif collaboration.invited_by == user and user_collaboration:
-                    can_revoke = True
-            except SpaceCollaborator.DoesNotExist:
-                pass
-
-        if not can_revoke:
-            return Response(
-                {"detail": "You do not have permission to revoke this invitation"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        collaboration.is_revoked = True
-        collaboration.save()
-
-        return Response(
-            {"detail": "Invitation revoked successfully"},
             status=status.HTTP_200_OK,
         )
