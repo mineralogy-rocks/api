@@ -167,7 +167,6 @@ class SpaceSerializer(serializers.ModelSerializer):
         required=False,
     )
     access_display = serializers.CharField(source="get_access_display", read_only=True)
-    is_owner = serializers.SerializerMethodField()
 
     class Meta:
         model = Space
@@ -175,7 +174,6 @@ class SpaceSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "description",
-            "is_owner",
             "owner",
             "access",
             "access_display",
@@ -186,12 +184,6 @@ class SpaceSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "owner", "created_at", "updated_at"]
-
-    def get_is_owner(self, obj):
-        request = self.context.get("request")
-        if request and request.user:
-            return obj.owner == request.user
-        return False
 
     @staticmethod
     def setup_eager_loading(queryset):

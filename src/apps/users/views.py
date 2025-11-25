@@ -102,13 +102,58 @@ class SpaceViewSet(viewsets.ModelViewSet):
     REQUIRES_ANY_COLLABORATOR = SpaceCollaborator.PERMISSION_VIEWER
 
     def get_queryset(self):
-        queryset = Space.objects.all()
-        serializer_class = self.get_serializer_class()
+        user = self.request.user
+        queryset = Space.objects.filter(
+            Q(owner=user)
+            | Q(
+                collaborators__user=user,
+                collaborators__is_accepted=True,
+                collaborators__is_revoked=False,
+            )
+        ).distinct()
 
+        serializer_class = self.get_serializer_class()
         if hasattr(serializer_class, "setup_eager_loading"):
             queryset = serializer_class.setup_eager_loading(queryset)
 
         return queryset
+
+    @action(detail=False, methods=["get"], url_path="my-spaces")
+    def my_spaces(self, request):
+        queryset = Space.objects.filter(owner=request.user)
+
+        serializer_class = self.get_serializer_class()
+        if hasattr(serializer_class, "setup_eager_loading"):
+            queryset = serializer_class.setup_eager_loading(queryset)
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = SpaceSerializer(page, many=True, context={"request": request})
+            return self.get_paginated_response(serializer.data)
+
+        serializer = SpaceSerializer(queryset, many=True, context={"request": request})
+        return Response(serializer.data)
+
+    @action(detail=False, methods=["get"], url_path="shared-spaces")
+    def shared_spaces(self, request):
+        user = request.user
+        queryset = Space.objects.filter(
+            collaborators__user=user,
+            collaborators__is_accepted=True,
+            collaborators__is_revoked=False,
+        )
+
+        serializer_class = self.get_serializer_class()
+        if hasattr(serializer_class, "setup_eager_loading"):
+            queryset = serializer_class.setup_eager_loading(queryset)
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = SpaceSerializer(page, many=True, context={"request": request})
+            return self.get_paginated_response(serializer.data)
+
+        serializer = SpaceSerializer(queryset, many=True, context={"request": request})
+        return Response(serializer.data)
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -157,25 +202,6 @@ class SpaceViewSet(viewsets.ModelViewSet):
             pass
 
         return (False, None)
-
-    @action(detail=False, methods=["get"], url_path="my-spaces")
-    def my_spaces(self, request):
-        user = request.user
-        spaces = Space.objects.filter(
-            Q(owner=user)
-            | Q(
-                collaborators__user=user,
-                collaborators__is_accepted=True,
-                collaborators__is_revoked=False,
-            )
-        ).distinct()
-
-        serializer_class = self.get_serializer_class()
-        if hasattr(serializer_class, "setup_eager_loading"):
-            spaces = serializer_class.setup_eager_loading(spaces)
-
-        serializer = SpaceSerializer(spaces, many=True, context={"request": request})
-        return Response(serializer.data)
 
     @action(detail=True, methods=["get"], url_path="collaborators")
     def collaborators(self, request, pk=None):
