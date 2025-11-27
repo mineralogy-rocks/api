@@ -5,8 +5,8 @@ from .forms import UserChangeForm
 from .forms import UserCreationForm
 from .models import Space
 from .models import SpaceCollaborator
-from .models import SpaceTag
 from .models import User
+from .models import UserTag
 
 
 @admin.register(User)
@@ -27,11 +27,16 @@ class UserAdmin(BaseUserAdmin):
     search_fields = ["username", "email"]
 
 
-@admin.register(SpaceTag)
-class SpaceTagAdmin(admin.ModelAdmin):
-    list_display = ["id", "name"]
-    search_fields = ["name"]
-    ordering = ["name"]
+@admin.register(UserTag)
+class UserTagAdmin(admin.ModelAdmin):
+    # Security: DO NOT show encrypted 'name_encrypted' field in list_display
+    list_display = ["id", "user", "created_at", "updated_at"]
+    list_filter = ["created_at", "user"]
+    search_fields = ["user__email", "user__username"]
+    raw_id_fields = ["user"]
+    readonly_fields = ["created_at", "updated_at", "name_encrypted"]
+    ordering = ["user", "-created_at"]
+    fields = ["user", "name_encrypted", "created_at", "updated_at"]
 
 
 class SpaceCollaboratorInline(admin.TabularInline):

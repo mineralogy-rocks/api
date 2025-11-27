@@ -21,6 +21,7 @@ from rest_framework.views import APIView
 from users.models import Space
 from users.models import SpaceCollaborator
 from users.models import User
+from users.models import UserTag
 from users.permissions import IsSpaceOwnerOrCollaborator
 from users.serializers import CollaboratorListSerializer
 from users.serializers import InvitationResponseSerializer
@@ -30,6 +31,7 @@ from users.serializers import SpaceInvitationSerializer
 from users.serializers import SpaceSerializer
 from users.serializers import SpaceUpdateSerializer
 from users.serializers import UserSerializer
+from users.serializers import UserTagSerializer
 from users.serializers import UserUpdateSerializer
 from users.services import activate_invited_user
 from users.services import calculate_expiration_date
@@ -452,3 +454,15 @@ class InvitationViewSet(viewsets.GenericViewSet):
             {"detail": "Invitation declined successfully"},
             status=status.HTTP_200_OK,
         )
+
+
+class UserTagViewSet(viewsets.ModelViewSet):
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserTagSerializer
+
+    def get_queryset(self):
+        return UserTag.objects.filter(user=self.request.user).order_by("-created_at")
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)

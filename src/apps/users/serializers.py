@@ -2,10 +2,12 @@
 from django.utils import timezone
 from rest_framework import serializers
 
+from users.encryption import decrypt_value
+from users.encryption import encrypt_value
 from users.models import Space
 from users.models import SpaceCollaborator
-from users.models import SpaceTag
 from users.models import User
+from users.models import UserTag
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -32,11 +34,51 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         return value
 
 
-class SpaceTagSerializer(serializers.ModelSerializer):
+class UserTagSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+
     class Meta:
-        model = SpaceTag
+        model = UserTag
+        fields = ["id", "name", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def get_name(self, obj):
+        return decrypt_value(obj.name_encrypted)
+
+    def validate(self, attrs):
+        name = self.initial_data.get("name", "").strip()
+
+        if not name:
+            raise serializers.ValidationError({"name": "Tag name cannot be empty."})
+
+        user = self.context["request"].user
+
+        queryset = self.Meta.model.objects.filter(user=user)
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+
+        for tag in queryset:
+            existing_name = decrypt_value(tag.name_encrypted)
+            if existing_name.lower() == name.lower():
+                raise serializers.ValidationError({"name": "You already have a tag with this name."})
+
+        attrs["name_encrypted"] = encrypt_value(name)
+        return attrs
+
+    def create(self, validated_data):
+        validated_data["user"] = self.context["request"].user
+        return super().create(validated_data)
+
+
+class UserTagReadSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserTag
         fields = ["id", "name"]
-        read_only_fields = ["id"]
+
+    def get_name(self, obj):
+        return decrypt_value(obj.name_encrypted)
 
 
 class UserBasicSerializer(serializers.ModelSerializer):
@@ -154,9 +196,9 @@ class CollaboratorListSerializer(serializers.ModelSerializer):
 class SpaceSerializer(serializers.ModelSerializer):
     owner = UserBasicSerializer(read_only=True)
     collaborators = SpaceCollaboratorSerializer(many=True, read_only=True)
-    tags = SpaceTagSerializer(many=True, read_only=True)
+    tags = UserTagReadSerializer(many=True, read_only=True)
     tag_ids = serializers.PrimaryKeyRelatedField(
-        queryset=SpaceTag.objects.all(),
+        queryset=UserTag.objects.none(),
         many=True,
         source="tags",
         write_only=True,
@@ -181,6 +223,12 @@ class SpaceSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "owner", "created_at", "updated_at"]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        if request and hasattr(request, "user") and request.user.is_authenticated:
+            self.fields["tag_ids"].queryset = UserTag.objects.filter(user=request.user)
+
     @staticmethod
     def setup_eager_loading(queryset):
         return queryset.select_related("owner").prefetch_related(
@@ -195,7 +243,7 @@ class SpaceSerializer(serializers.ModelSerializer):
 
 class SpaceCreateSerializer(serializers.ModelSerializer):
     tag_ids = serializers.PrimaryKeyRelatedField(
-        queryset=SpaceTag.objects.all(),
+        queryset=UserTag.objects.none(),
         many=True,
         source="tags",
         required=False,
@@ -204,6 +252,12 @@ class SpaceCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Space
         fields = ["id", "name", "description", "access", "tag_ids"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        if request and hasattr(request, "user") and request.user.is_authenticated:
+            self.fields["tag_ids"].child_relation.queryset = UserTag.objects.filter(user=request.user)
 
     def create(self, validated_data):
         validated_data["owner"] = self.context["request"].user
@@ -212,15 +266,22 @@ class SpaceCreateSerializer(serializers.ModelSerializer):
 
 class SpaceUpdateSerializer(serializers.ModelSerializer):
     tag_ids = serializers.PrimaryKeyRelatedField(
-        queryset=SpaceTag.objects.all(),
+        queryset=UserTag.objects.none(),
         many=True,
         source="tags",
         required=False,
+        allow_empty=True,
     )
 
     class Meta:
         model = Space
         fields = ["id", "name", "description", "access", "tag_ids"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        if request and hasattr(request, "user") and request.user.is_authenticated:
+            self.fields["tag_ids"].child_relation.queryset = UserTag.objects.filter(user=request.user)
 
 
 class SpaceInvitationSerializer(serializers.Serializer):

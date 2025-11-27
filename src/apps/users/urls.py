@@ -10,6 +10,7 @@ app_name = "users"
 router = DefaultRouter()
 router.register(r"spaces", views.SpaceViewSet, basename="space")
 router.register(r"invitations", views.InvitationViewSet, basename="invitation")
+router.register(r"tags", views.UserTagViewSet, basename="user-tag")
 
 urlpatterns = [
     path("me/", views.CurrentUserView.as_view(), name="current-user"),

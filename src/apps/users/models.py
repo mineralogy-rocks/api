@@ -111,11 +111,21 @@ class User(PermissionsMixin, AbstractBaseUser):
         send_mail(subject, message, from_email, [self.email], **kwargs)
 
 
-class SpaceTag(BaseModel, Nameable):
+class UserTag(BaseModel, Creatable, Updatable):
+    user = models.ForeignKey(
+        "User",
+        on_delete=models.CASCADE,
+        related_name="tags",
+    )
+    name_encrypted = models.TextField()
+
     class Meta:
-        ordering = ["name"]
-        verbose_name = "Space Tag"
-        verbose_name_plural = "Space Tags"
+        ordering = ["-created_at"]
+        verbose_name = "User Tag"
+        verbose_name_plural = "User Tags"
+
+    def __str__(self):
+        return f"Tag {self.id} ({self.user.email})"
 
 
 class Space(BaseModel, Nameable, Creatable, Updatable):
@@ -140,7 +150,7 @@ class Space(BaseModel, Nameable, Creatable, Updatable):
         default=ACCESS_FULL_PUBLIC,
         null=False,
     )
-    tags = models.ManyToManyField(SpaceTag, related_name="spaces", blank=True)
+    tags = models.ManyToManyField(UserTag, related_name="spaces", blank=True)
 
     class Meta:
         ordering = ["-created_at"]
