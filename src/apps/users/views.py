@@ -12,6 +12,7 @@ from rest_framework.decorators import action
 from rest_framework.decorators import api_view
 from rest_framework.decorators import authentication_classes
 from rest_framework.decorators import permission_classes
+from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import AllowAny
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -40,6 +41,11 @@ from users.services import validate_invitation_token
 class CsrfExemptSessionAuthentication(SessionAuthentication):
     def enforce_csrf(self, request):
         return
+
+
+class SpacePagination(LimitOffsetPagination):
+    default_limit = 6
+    max_limit = 100
 
 
 class CurrentUserView(APIView):
@@ -97,6 +103,7 @@ def logout_view(request):
 class SpaceViewSet(viewsets.ModelViewSet):
     authentication_classes = [SessionAuthentication]
     permission_classes = [IsAuthenticated, IsSpaceOwnerOrCollaborator]
+    pagination_class = SpacePagination
 
     REQUIRES_ADMIN = SpaceCollaborator.PERMISSION_ADMIN
     REQUIRES_ANY_COLLABORATOR = SpaceCollaborator.PERMISSION_VIEWER

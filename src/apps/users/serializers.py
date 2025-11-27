@@ -38,10 +38,6 @@ class SpaceTagSerializer(serializers.ModelSerializer):
         fields = ["id", "name"]
         read_only_fields = ["id"]
 
-    @staticmethod
-    def setup_eager_loading(queryset):
-        return queryset
-
 
 class UserBasicSerializer(serializers.ModelSerializer):
     class Meta:
