@@ -2,6 +2,8 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth import login
 from django.contrib.auth import logout
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -23,6 +25,7 @@ from users.models import SpaceCollaborator
 from users.models import User
 from users.models import UserTag
 from users.permissions import IsSpaceOwnerOrCollaborator
+from users.serializers import AcceptInvitationWithPasswordSerializer
 from users.serializers import CollaboratorListSerializer
 from users.serializers import InvitationResponseSerializer
 from users.serializers import SpaceCollaboratorSerializer
@@ -33,7 +36,6 @@ from users.serializers import SpaceUpdateSerializer
 from users.serializers import UserSerializer
 from users.serializers import UserTagSerializer
 from users.serializers import UserUpdateSerializer
-from users.services import activate_invited_user
 from users.services import calculate_expiration_date
 from users.services import generate_invitation_token
 from users.services import send_invitation_email
@@ -123,7 +125,7 @@ class SpaceViewSet(viewsets.ModelViewSet):
 
         serializer_class = self.get_serializer_class()
         if hasattr(serializer_class, "setup_eager_loading"):
-            queryset = serializer_class.setup_eager_loading(queryset)
+            queryset = serializer_class.setup_eager_loading(queryset=queryset, request=self.request)
 
         return queryset
 
@@ -133,7 +135,7 @@ class SpaceViewSet(viewsets.ModelViewSet):
 
         serializer_class = self.get_serializer_class()
         if hasattr(serializer_class, "setup_eager_loading"):
-            queryset = serializer_class.setup_eager_loading(queryset)
+            queryset = serializer_class.setup_eager_loading(queryset=queryset, request=request)
 
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -154,7 +156,7 @@ class SpaceViewSet(viewsets.ModelViewSet):
 
         serializer_class = self.get_serializer_class()
         if hasattr(serializer_class, "setup_eager_loading"):
-            queryset = serializer_class.setup_eager_loading(queryset)
+            queryset = serializer_class.setup_eager_loading(queryset=queryset, request=request)
 
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -401,6 +403,54 @@ class SpaceViewSet(viewsets.ModelViewSet):
 class InvitationViewSet(viewsets.GenericViewSet):
     @action(
         detail=False,
+        methods=["get"],
+        permission_classes=[AllowAny],
+        authentication_classes=[CsrfExemptSessionAuthentication],
+        url_path="validate",
+    )
+    def validate_token(self, request):
+        """
+        GET /user/invitations/validate/?token=...
+        Validates token and returns user state for frontend.
+        """
+        token = request.query_params.get("token")
+
+        if not token:
+            return Response(
+                {"is_valid": False, "error": "Token is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        invitation, error = validate_invitation_token(token)
+
+        if error:
+            return Response(
+                {"is_valid": False, "error": error},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        requires_password = not invitation.user.has_usable_password()
+
+        inviter_name = (
+            (invitation.invited_by.get_full_name() or invitation.invited_by.username or invitation.invited_by.email)
+            if invitation.invited_by
+            else "Unknown"
+        )
+
+        return Response(
+            {
+                "is_valid": True,
+                "requires_password": requires_password,
+                "email": invitation.user.email,
+                "space_name": invitation.space.name,
+                "space_id": str(invitation.space.id),
+                "inviter_name": inviter_name,
+                "permission_level": invitation.get_permission_level_display(),
+            }
+        )
+
+    @action(
+        detail=False,
         methods=["post"],
         permission_classes=[AllowAny],
         authentication_classes=[CsrfExemptSessionAuthentication],
@@ -417,12 +467,29 @@ class InvitationViewSet(viewsets.GenericViewSet):
         if error:
             return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
 
-        activate_invited_user(invitation.user, invitation)
+        user = invitation.user
+
+        if not user.has_usable_password():
+            return Response(
+                {
+                    "detail": "New user must set password",
+                    "requires_password": True,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not user.is_active:
+            user.is_active = True
+            user.save()
+
+        invitation.is_pending = False
+        invitation.is_accepted = True
+        invitation.save()
 
         return Response(
             {
                 "detail": "Invitation accepted successfully",
-                "space_id": invitation.space.id,
+                "space_id": str(invitation.space.id),
                 "space_name": invitation.space.name,
             },
             status=status.HTTP_200_OK,
@@ -433,25 +500,57 @@ class InvitationViewSet(viewsets.GenericViewSet):
         methods=["post"],
         permission_classes=[AllowAny],
         authentication_classes=[CsrfExemptSessionAuthentication],
-        url_path="decline",
+        url_path="accept-with-password",
     )
-    def decline_invitation(self, request):
-        serializer = InvitationResponseSerializer(data=request.data)
+    def accept_with_password(self, request):
+        """
+        POST /user/invitations/accept-with-password/
+        Accept invitation and set password for new users.
+        """
+        serializer = AcceptInvitationWithPasswordSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         token = serializer.validated_data["token"]
+        password = serializer.validated_data["password"]
+
         invitation, error = validate_invitation_token(token)
 
         if error:
             return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
 
+        user = invitation.user
+
+        if user.has_usable_password():
+            return Response(
+                {"detail": "User already has a password. Use standard accept endpoint."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            validate_password(password, user)
+        except DjangoValidationError as e:
+            return Response(
+                {"password": list(e.messages)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.set_password(password)
+        user.is_active = True
+        user.save()
+
         invitation.is_pending = False
-        invitation.is_accepted = False
+        invitation.is_accepted = True
         invitation.save()
 
+        login(request, user)
+
         return Response(
-            {"detail": "Invitation declined successfully"},
+            {
+                "detail": "Invitation accepted and password set successfully",
+                "space_id": str(invitation.space.id),
+                "space_name": invitation.space.name,
+            },
             status=status.HTTP_200_OK,
         )
 

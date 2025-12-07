@@ -15,7 +15,7 @@ def generate_invitation_token():
 
 def send_invitation_email(email, space, inviter, token, permission_level_display, is_new_user=False):
     frontend_url = f"{settings.SCHEMA}://{settings.FRONTEND_DOMAIN}"
-    accept_url = f"{frontend_url}/invitations/accept?token={token}"
+    accept_url = f"{frontend_url}/spaces/join?token={token}"
     decline_url = f"{frontend_url}/invitations/decline?token={token}"
 
     inviter_name = inviter.get_full_name() or inviter.username or inviter.email
@@ -32,7 +32,7 @@ def send_invitation_email(email, space, inviter, token, permission_level_display
     }
 
     subject = f"Invitation to collaborate on {space.name} - mineralogy.rocks"
-    template = "users/templates/invitation_email.html"
+    template = "invitation_email.html"
 
     send_email(subject, template, [email], context)
 
@@ -54,16 +54,6 @@ def validate_invitation_token(token):
 
     except SpaceCollaborator.DoesNotExist:
         return None, "Invalid invitation token"
-
-
-def activate_invited_user(user, space_collaborator):
-    if not user.is_active:
-        user.is_active = True
-        user.save()
-
-    space_collaborator.is_pending = False
-    space_collaborator.is_accepted = True
-    space_collaborator.save()
 
 
 def calculate_expiration_date(days=7):

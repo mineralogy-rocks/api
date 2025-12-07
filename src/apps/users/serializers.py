@@ -1,4 +1,5 @@
 # -*- coding: UTF-8 -*-
+from django.db.models import Prefetch
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -180,8 +181,6 @@ class CollaboratorListSerializer(serializers.ModelSerializer):
             return "Revoked"
         elif obj.is_accepted:
             return "Active"
-        elif obj.is_accepted is False:
-            return "Declined"
         elif obj.is_pending:
             if obj.invitation_expires_at and obj.invitation_expires_at < timezone.now():
                 return "Expired"
@@ -230,10 +229,12 @@ class SpaceSerializer(serializers.ModelSerializer):
             self.fields["tag_ids"].queryset = UserTag.objects.filter(user=request.user)
 
     @staticmethod
-    def setup_eager_loading(queryset):
-        return queryset.select_related("owner").prefetch_related(
-            "tags",
-            "collaborators__user",
+    def setup_eager_loading(**kwargs):
+        queryset, request = kwargs.get("queryset"), kwargs.get("request")
+        _select_related = ["owner"]
+        _prefetch_related = ["tags", "collaborators__user"]
+        return queryset.select_related(*_select_related).prefetch_related(
+            "collaborators__user", Prefetch("tags", queryset=UserTag.objects.filter(user=request.user))
         )
 
     def create(self, validated_data):
@@ -289,8 +290,6 @@ class SpaceInvitationSerializer(serializers.Serializer):
     permission_level = serializers.IntegerField(required=True)
 
     def validate_permission_level(self, value):
-        from users.models import SpaceCollaborator
-
         valid_levels = [
             SpaceCollaborator.PERMISSION_VIEWER,
             SpaceCollaborator.PERMISSION_ADMIN,
@@ -303,3 +302,16 @@ class SpaceInvitationSerializer(serializers.Serializer):
 
 class InvitationResponseSerializer(serializers.Serializer):
     token = serializers.CharField(required=True)
+
+
+class AcceptInvitationWithPasswordSerializer(serializers.Serializer):
+    """Accept invitation with password for new users"""
+
+    token = serializers.CharField(required=True)
+    password = serializers.CharField(required=True, write_only=True, min_length=8)
+    password_confirm = serializers.CharField(required=True, write_only=True)
+
+    def validate(self, attrs):
+        if attrs["password"] != attrs["password_confirm"]:
+            raise serializers.ValidationError({"password_confirm": "Passwords do not match"})
+        return attrs

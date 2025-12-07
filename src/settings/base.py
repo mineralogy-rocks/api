@@ -229,6 +229,17 @@ SIMPLE_JWT = {
     "JTI_CLAIM": "jti",
 }
 
+# Session security settings
+SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_AGE = 1209600  # 2 weeks
+
+# CSRF security settings
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = "Lax"
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "mineralogy.rocks API",
     "DESCRIPTION": "This project is funded by SASPRO2, Marie Skłodowska-Curie Cofund.",
