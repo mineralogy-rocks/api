@@ -78,6 +78,7 @@ class CurrentUserView(APIView):
 def login_view(request):
     username = request.data.get("username")
     password = request.data.get("password")
+    remember_me = request.data.get("remember_me", False)
 
     if not username or not password:
         return Response(
@@ -89,6 +90,12 @@ def login_view(request):
 
     if user is not None:
         login(request, user)
+
+        if remember_me:
+            request.session.set_expiry(60 * 60 * 24 * 30)
+        else:
+            request.session.set_expiry(0)
+
         serializer = UserSerializer(user)
         return Response(serializer.data, status=status.HTTP_200_OK)
     else:
