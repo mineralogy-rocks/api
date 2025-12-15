@@ -27,7 +27,9 @@ from users.models import UserTag
 from users.permissions import IsSpaceOwnerOrCollaborator
 from users.serializers import AcceptInvitationWithPasswordSerializer
 from users.serializers import CollaboratorListSerializer
+from users.serializers import ForgotPasswordSerializer
 from users.serializers import InvitationResponseSerializer
+from users.serializers import ResetPasswordSerializer
 from users.serializers import SpaceCollaboratorSerializer
 from users.serializers import SpaceCreateSerializer
 from users.serializers import SpaceInvitationSerializer
@@ -38,8 +40,11 @@ from users.serializers import UserTagSerializer
 from users.serializers import UserUpdateSerializer
 from users.services import calculate_expiration_date
 from users.services import generate_invitation_token
+from users.services import generate_password_reset_token
 from users.services import send_invitation_email
+from users.services import send_password_reset_email
 from users.services import validate_invitation_token
+from users.services import validate_password_reset_token
 
 
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -572,3 +577,91 @@ class UserTagViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+
+class PasswordResetViewSet(viewsets.GenericViewSet):
+    @action(
+        detail=False,
+        methods=["post"],
+        permission_classes=[AllowAny],
+        authentication_classes=[CsrfExemptSessionAuthentication],
+        url_path="forgot",
+    )
+    def forgot_password(self, request):
+        serializer = ForgotPasswordSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data["email"]
+
+        try:
+            user = User.objects.get(email=email, is_active=True)
+            token_obj = generate_password_reset_token(user)
+            send_password_reset_email(user, token_obj.token)
+        except User.DoesNotExist:
+            pass
+
+        return Response(
+            {"detail": "If an account with this email exists, a password reset link has been sent."},
+            status=status.HTTP_200_OK,
+        )
+
+    @action(
+        detail=False,
+        methods=["get"],
+        permission_classes=[AllowAny],
+        authentication_classes=[CsrfExemptSessionAuthentication],
+        url_path="validate",
+    )
+    def validate_token(self, request):
+        token = request.query_params.get("token")
+
+        if not token:
+            return Response({"is_valid": False, "error": "Token is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        _token, _error = validate_password_reset_token(token)
+
+        if _error:
+            return Response(
+                {"is_valid": False, "error": _error},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response({"is_valid": True, "email": _token.user.email}, status=status.HTTP_200_OK)
+
+    @action(
+        detail=False,
+        methods=["post"],
+        permission_classes=[AllowAny],
+        authentication_classes=[CsrfExemptSessionAuthentication],
+        url_path="reset",
+    )
+    def reset_password(self, request):
+        serializer = ResetPasswordSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        token = serializer.validated_data["token"]
+        password = serializer.validated_data["password"]
+
+        _token, _error = validate_password_reset_token(token)
+
+        if _error:
+            return Response({"detail": _error}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = _token.user
+
+        try:
+            validate_password(password, user)
+        except DjangoValidationError as e:
+            return Response({"password": list(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(password)
+        user.save()
+
+        _token.is_used = True
+        _token.save()
+
+        login(request, user)
+
+        return Response({"detail": "Password has been reset successfully"}, status=status.HTTP_200_OK)

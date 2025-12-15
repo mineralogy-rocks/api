@@ -11,6 +11,7 @@ router = DefaultRouter()
 router.register(r"spaces", views.SpaceViewSet, basename="space")
 router.register(r"invitations", views.InvitationViewSet, basename="invitation")
 router.register(r"tags", views.UserTagViewSet, basename="user-tag")
+router.register(r"password", views.PasswordResetViewSet, basename="password-reset")
 
 urlpatterns = [
     path("me/", views.CurrentUserView.as_view(), name="current-user"),

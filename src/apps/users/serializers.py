@@ -305,8 +305,6 @@ class InvitationResponseSerializer(serializers.Serializer):
 
 
 class AcceptInvitationWithPasswordSerializer(serializers.Serializer):
-    """Accept invitation with password for new users"""
-
     token = serializers.CharField(required=True)
     password = serializers.CharField(required=True, write_only=True, min_length=8)
     password_confirm = serializers.CharField(required=True, write_only=True)
@@ -315,3 +313,12 @@ class AcceptInvitationWithPasswordSerializer(serializers.Serializer):
         if attrs["password"] != attrs["password_confirm"]:
             raise serializers.ValidationError({"password_confirm": "Passwords do not match"})
         return attrs
+
+
+class ForgotPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+
+
+class ResetPasswordSerializer(serializers.Serializer):
+    token = serializers.CharField(required=True)
+    password = serializers.CharField(required=True, write_only=True, min_length=8)

@@ -6,6 +6,7 @@ from core.utils import send_email
 from django.conf import settings
 from django.utils import timezone
 
+from users.models import PasswordResetToken
 from users.models import SpaceCollaborator
 
 
@@ -58,3 +59,49 @@ def validate_invitation_token(token):
 
 def calculate_expiration_date(days=7):
     return timezone.now() + timedelta(days=days)
+
+
+def generate_password_reset_token(user):
+    PasswordResetToken.objects.filter(user=user, is_used=False).update(is_used=True)
+
+    token = secrets.token_urlsafe(48)
+    expires_at = calculate_expiration_date(days=1)
+
+    password_reset_token = PasswordResetToken.objects.create(
+        user=user,
+        token=token,
+        expires_at=expires_at,
+    )
+
+    return password_reset_token
+
+
+def validate_password_reset_token(token):
+    try:
+        token_obj = PasswordResetToken.objects.get(token=token)
+
+        if token_obj.is_used:
+            return None, "This password reset link has already been used"
+
+        if token_obj.expires_at < timezone.now():
+            return None, "This password reset link has expired"
+
+        return token_obj, None
+
+    except PasswordResetToken.DoesNotExist:
+        return None, "Invalid password reset token"
+
+
+def send_password_reset_email(user, token):
+    frontend_url = f"{settings.SCHEMA}://{settings.FRONTEND_DOMAIN}"
+    reset_url = f"{frontend_url}/reset-password?token={token}"
+
+    context = {
+        "user_email": user.email,
+        "reset_url": reset_url,
+    }
+
+    subject = "Reset your password - mineralogy.rocks"
+    template = "password_reset_email.html"
+
+    send_email(subject, template, [user.email], context)
