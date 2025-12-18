@@ -16,8 +16,7 @@ def generate_invitation_token():
 
 def send_invitation_email(email, space, inviter, token, permission_level_display, is_new_user=False):
     frontend_url = f"{settings.SCHEMA}://{settings.FRONTEND_DOMAIN}"
-    accept_url = f"{frontend_url}/spaces/join?token={token}"
-    decline_url = f"{frontend_url}/invitations/decline?token={token}"
+    accept_url = f"{frontend_url}/hub/spaces/join?token={token}"
 
     inviter_name = inviter.get_full_name() or inviter.username or inviter.email
 
@@ -28,7 +27,6 @@ def send_invitation_email(email, space, inviter, token, permission_level_display
         "space_description": space.description,
         "permission_level": permission_level_display,
         "accept_url": accept_url,
-        "decline_url": decline_url,
         "is_new_user": is_new_user,
     }
 
@@ -94,7 +92,7 @@ def validate_password_reset_token(token):
 
 def send_password_reset_email(user, token):
     frontend_url = f"{settings.SCHEMA}://{settings.FRONTEND_DOMAIN}"
-    reset_url = f"{frontend_url}/reset-password?token={token}"
+    reset_url = f"{frontend_url}/auth/reset-password?token={token}"
 
     context = {
         "user_email": user.email,
