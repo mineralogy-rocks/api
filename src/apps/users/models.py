@@ -1,4 +1,8 @@
 # -*- coding: UTF-8 -*-
+from core.models.base import BaseModel
+from core.models.base import Creatable
+from core.models.base import Nameable
+from core.models.base import Updatable
 from django.contrib.auth.models import AbstractBaseUser
 from django.contrib.auth.models import BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
@@ -105,3 +109,128 @@ class User(PermissionsMixin, AbstractBaseUser):
 
     def email_user(self, subject, message, from_email=None, **kwargs):
         send_mail(subject, message, from_email, [self.email], **kwargs)
+
+
+class UserTag(BaseModel, Creatable, Updatable):
+    user = models.ForeignKey(
+        "User",
+        on_delete=models.CASCADE,
+        related_name="tags",
+    )
+    name_encrypted = models.TextField()
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "User Tag"
+        verbose_name_plural = "User Tags"
+
+    def __str__(self):
+        return f"Tag {self.id} ({self.user.email})"
+
+
+class Space(BaseModel, Nameable, Creatable, Updatable):
+    ACCESS_FULL_PUBLIC = 0
+    ACCESS_SEMI_PUBLIC = 1
+    ACCESS_PRIVATE = 2
+
+    ACCESS_CHOICES = (
+        (ACCESS_FULL_PUBLIC, _("Full Public")),
+        (ACCESS_SEMI_PUBLIC, _("Semi Public")),
+        (ACCESS_PRIVATE, _("Private")),
+    )
+
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="owned_spaces",
+    )
+    description = models.TextField(null=True, blank=True)
+    access = models.IntegerField(
+        choices=ACCESS_CHOICES,
+        default=ACCESS_FULL_PUBLIC,
+        null=False,
+    )
+    tags = models.ManyToManyField(UserTag, related_name="spaces", blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Space"
+        verbose_name_plural = "Spaces"
+
+    def __str__(self):
+        return self.name
+
+
+class PasswordResetToken(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="password_reset_tokens")
+    token = models.CharField(max_length=100, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Password reset token for {self.user.email}"
+
+
+class SpaceCollaborator(BaseModel, Creatable):
+    PERMISSION_VIEWER = 0
+    PERMISSION_ADMIN = 1
+    PERMISSION_SUPERADMIN = 2
+
+    PERMISSION_CHOICES = (
+        (PERMISSION_VIEWER, _("Viewer")),
+        (PERMISSION_ADMIN, _("Admin")),
+        (PERMISSION_SUPERADMIN, _("Superadmin")),
+    )
+
+    space = models.ForeignKey(
+        Space,
+        on_delete=models.CASCADE,
+        related_name="collaborators",
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="space_collaborations",
+        null=True,
+        blank=True,
+    )
+    permission_level = models.IntegerField(
+        choices=PERMISSION_CHOICES,
+        null=False,
+    )
+
+    is_pending = models.BooleanField(default=True)
+    is_accepted = models.BooleanField(null=True, blank=True, default=None)
+    is_revoked = models.BooleanField(default=False)
+    invitation_token = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    invitation_sent_at = models.DateTimeField(null=True, blank=True)
+    invitation_expires_at = models.DateTimeField(null=True, blank=True)
+    invited_email = models.EmailField(null=True, blank=True)
+    invited_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name="sent_invitations",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Space Collaborator"
+        verbose_name_plural = "Space Collaborators"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["space", "user"],
+                condition=models.Q(is_accepted=True),
+                name="unique_accepted_collaborator",
+            )
+        ]
+
+    def __str__(self):
+        email = self.user.email if self.user else self.invited_email
+        status = "Pending" if self.is_pending else "Accepted"
+        return f"{email} - {self.space.name} ({self.get_permission_level_display()}) - {status}"

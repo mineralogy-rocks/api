@@ -1,6 +1,5 @@
 # -*- coding: UTF-8 -*-
 import mimetypes
-import secrets
 import uuid
 
 from core.models.base import BaseModel
@@ -9,12 +8,11 @@ from core.models.base import Nameable
 from core.models.base import Updatable
 from core.models.mineral import Mineral
 from django.contrib.auth import get_user_model
-from django.core.files.storage import default_storage
 from django.db import models
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from .utils import ErebusStorage
+from .utils import _create_hash
 from .utils import _get_upload_path
 
 
@@ -30,6 +28,12 @@ class Component(BaseModel, Nameable):
         ]
         verbose_name = "Component"
         verbose_name_plural = "Components"
+
+
+class Unit(BaseModel, Nameable):
+    class Meta:
+        verbose_name = "Unit"
+        verbose_name_plural = "Units"
 
 
 class Measurement(BaseModel, Creatable):
@@ -146,13 +150,11 @@ class MeasurementComponents(BaseModel):
 
 
 class Queue(BaseModel, Creatable, Updatable):
-    # TODO: add project/space field
-
-    ALLOWED_EXTENSIONS = ["csv", "xls", "xlsx"]
+    ALLOWED_EXTENSIONS = ["csv", "xls", "xlsx", "pdf"]
     MAX_SIZE_ALLOWED = 1024 * 1024 * 10
 
     STATUS_QUEUED = 0
-    STATUS_PARSED = 1
+    STATUS_AI_REQUESTED = 1
     STATUS_AI_GENERATED = 2
     STATUS_PROCESSED = 3
 
@@ -164,7 +166,7 @@ class Queue(BaseModel, Creatable, Updatable):
 
     STATUS_CHOICES = (
         (STATUS_QUEUED, _("Queued")),
-        (STATUS_PARSED, _("Parsed")),
+        (STATUS_AI_REQUESTED, _("AI Requested")),
         (STATUS_AI_GENERATED, _("AI Response(s) Generated")),
         (STATUS_PROCESSED, _("Processed")),
         (STATUS_PARSING_FAILED, _("Parsing Failed")),
@@ -184,6 +186,7 @@ class Queue(BaseModel, Creatable, Updatable):
     )
 
     uuid = models.UUIDField(default=uuid.uuid4, unique=True)
+    hash = models.CharField(max_length=21, null=True)
 
     owner = models.ForeignKey(
         get_user_model(),
@@ -192,6 +195,15 @@ class Queue(BaseModel, Creatable, Updatable):
         blank=True,
         default=None,
         help_text=_("Owner of the file"),
+    )
+    space = models.ForeignKey(
+        "users.Space",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        default=None,
+        related_name="queues",
+        help_text=_("Space associated with the file"),
     )
 
     name = models.CharField(max_length=1000, null=False, help_text=_("File name"))
@@ -204,6 +216,7 @@ class Queue(BaseModel, Creatable, Updatable):
         null=False,
         help_text=_("File stored in S3"),
     )
+    markdown = models.TextField(null=True, blank=True)
 
     size = models.PositiveIntegerField(null=True, help_text=_("File size in bytes"))
     mime_type = models.CharField(max_length=200, null=True, blank=True, help_text=_("File MIME type"))
@@ -215,10 +228,12 @@ class Queue(BaseModel, Creatable, Updatable):
         choices=ACCESS_CHOICES, default=ACCESS_FULL_PUBLIC, null=False, help_text=_("Access level")
     )
 
-    parsed_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of parsing completion"))
     ai_generated_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of AI response generation"))
     processed_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of processing completion"))
     archived_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of archiving"))
+
+    extract_composition = models.BooleanField(default=True)
+    extract_metadata = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = "File Queue"
@@ -237,29 +252,14 @@ class Queue(BaseModel, Creatable, Updatable):
         except Exception:
             pass
         self.size = self.file.size
+        if not self.hash:
+            self.hash = _create_hash(12)
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
         self.status = self.STATUS_ARCHIVED
         self.save()
         return self
-
-    @property
-    def get_unprocessed_url(self):
-        return default_storage.url(f"{self.uuid}/unprocessed/")
-
-    @property
-    def get_parsed_url(self):
-        if self.status in [self.STATUS_PROCESSED, self.STATUS_PARSED] and self.chunks.exists():
-            _max_version = self.chunks.aggregate(ver=models.Max("version"))["ver"]
-            return default_storage.url(f"{self.uuid}/{_max_version}/parsed/")
-        return None
-
-    @property
-    def parsing_version(self):
-        if self.chunks:
-            return self.chunks.order_by("-version").first().version
-        return 0
 
 
 class CodeVersion(BaseModel, Creatable):
@@ -286,83 +286,28 @@ class CodeVersion(BaseModel, Creatable):
         self.patch = patch
 
 
-class Chunk(BaseModel, Creatable):
-    hash = models.CharField(max_length=21, null=True, help_text=_("Hash of the chunk"))
-
-    parent = models.ForeignKey(
-        Queue, on_delete=models.CASCADE, null=False, related_name="chunks", help_text=_("Parent file of the chunk")
-    )
-    code_version = models.ForeignKey(
-        CodeVersion, on_delete=models.SET_NULL, null=True, help_text=_("Code version used for processing")
-    )
-    version = models.IntegerField(default=1, help_text=_("Version of the chunk"))
-
-    data = models.JSONField(null=True, help_text=_("Raw data from the chunk"))
-
-    extract_composition = models.BooleanField(
-        default=True, help_text=_("Flag to indicate if the chunk should be used for extracting composition")
-    )
-    extract_metadata = models.BooleanField(
-        default=True, help_text=_("Flag to indicate if the chunk should be used for extracting metadata")
-    )
+class PromptTag(BaseModel):
+    key = models.CharField(max_length=200, null=False, unique=True)
+    value = models.CharField(max_length=200, null=False)
 
     class Meta:
-        verbose_name = "Chunk"
-        verbose_name_plural = "Chunks"
-        ordering = ["-created_at"]
-        get_latest_by = ["-created_at"]
-
-    def __str__(self):
-        return self.hash
-
-    def save(self, *args, **kwargs):
-        if not self.hash:
-            self.hash = secrets.token_urlsafe(12)
-        super().save(*args, **kwargs)
+        verbose_name = "Prompt Tag"
+        verbose_name_plural = "Prompt Tags"
 
 
-class ChunkIssue(BaseModel, Creatable):
-    chunk = models.ForeignKey(Chunk, on_delete=models.CASCADE, null=False, related_name="issues")
-
-    name = models.CharField(max_length=100, null=False, help_text=_("Issue name"))
-    comment = models.TextField(null=False, help_text=_("Description"))
-
-    email = models.EmailField(null=False, help_text=_("Email address of the reporter"))
-    user = models.ForeignKey(
-        get_user_model(),
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        default=None,
-        help_text=_("User who reported the issue"),
-    )
-
-    is_resolved = models.BooleanField(default=False, help_text=_("Flag to indicate if the issue has been resolved"))
-    resolved_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of resolution"))
+class PromptType(BaseModel, Nameable):
+    tags = models.ManyToManyField(PromptTag)
 
     class Meta:
-        verbose_name = "Chunk Issue"
-        verbose_name_plural = "Chunk Issues"
-        ordering = ["-created_at"]
-        get_latest_by = ["-created_at"]
-
-    def save(self, *args, **kwargs):
-        if self.is_resolved:
-            self.resolved_at = timezone.now()
-        super().save(*args, **kwargs)
+        verbose_name = "Prompt Tag"
+        verbose_name_plural = "Prompt Tags"
 
 
 class Prompt(BaseModel, Creatable):
-    PROMPT_COMPOSITION = 0
-    PROMPT_METADATA = 1
+    openai_id = models.CharField(max_length=255, null=True)
 
-    PROMPT_CHOICES = (
-        (PROMPT_COMPOSITION, _("Prompt for composition extraction")),
-        (PROMPT_METADATA, _("Prompt for metadata extraction")),
-    )
-
-    text = models.TextField(blank=True, null=True, help_text=_("Prompt text"))
-    type = models.IntegerField(choices=PROMPT_CHOICES, null=False, help_text=_("Prompt type"))
+    text = models.TextField(blank=True, null=True)
+    type = models.ForeignKey(PromptType, null=True, on_delete=models.SET_NULL, related_name="prompts")
 
     class Meta:
         verbose_name = "Prompt"
@@ -371,26 +316,47 @@ class Prompt(BaseModel, Creatable):
         get_latest_by = ["-created_at"]
 
 
-class ChunkResponse(BaseModel, Creatable, Updatable):
-    chunk = models.ForeignKey(Chunk, on_delete=models.CASCADE, null=False, related_name="responses")
-    prompt = models.ForeignKey(Prompt, on_delete=models.SET_NULL, null=True, related_name="responses")
-    model = models.CharField(max_length=100, null=False, help_text=_("Model used for response generation"))
+class AIResponse(BaseModel, Creatable):
+    MODEL_GPT_5_NANO = "gpt-5-nano"
+    MODEL_GPT_5_MINI = "gpt-5-mini-2025-08-07"
 
-    response = models.TextField(null=True, blank=True, help_text=_("Raw response(s) from AI service"))
-    clean_response = models.JSONField(null=True, blank=True, help_text=_("Parsed response from AI service"))
-
-    is_extracted = models.BooleanField(
-        default=False, help_text=_("Flag to indicate if structural data is extracted from the response to the database")
+    MODEL_CHOICES = (
+        (MODEL_GPT_5_NANO, _("GPT-5 Nano")),
+        (MODEL_GPT_5_MINI, _("GPT-5 Mini")),
     )
-    is_error = models.BooleanField(default=False, help_text=_("Flag to indicate if processing/extraction failed"))
 
+    hash = models.CharField(max_length=21, null=True, help_text=_("Hash of the chunk"))
+
+    batch = models.CharField(max_length=255, null=True, help_text=_("Batch identifier for processing"))
+    queue = models.ForeignKey(Queue, on_delete=models.CASCADE, null=False, related_name="responses")
+    prompt = models.ForeignKey(Prompt, on_delete=models.SET_NULL, null=True, related_name="responses")
+    model = models.CharField(choices=MODEL_CHOICES, null=False, help_text=_("Model used for processing"))
+
+    request_raw = models.TextField(null=True, blank=True, help_text=_("Prompt text used for response generation"))
+    response_raw = models.TextField(null=True, blank=True, help_text=_("Raw response text from AI service"))
+    response_parsed = models.JSONField(null=True, blank=True, help_text=_("Parsed response from AI service"))
+
+    is_error = models.BooleanField(default=False, help_text=_("Flag to indicate if processing/extraction failed"))
     exception = models.TextField(null=True, blank=True, help_text=_("Exception message"))
 
+    scheduled_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of response generation"))
+    answered_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of response generation"))
+    processed_at = models.DateTimeField(null=True, blank=True, help_text=_("Datetime of processing completion"))
+
+    input_tokens = models.IntegerField(null=True, blank=True)
+    output_tokens = models.IntegerField(null=True, blank=True)
+    total_tokens = models.IntegerField(null=True, blank=True)
+
     class Meta:
-        verbose_name = "Chunk Response"
-        verbose_name_plural = "Chunk Responses"
-        ordering = ["-created_at", "-updated_at"]
+        verbose_name = "AI Response"
+        verbose_name_plural = "AI Responses"
+        ordering = ["-created_at"]
         get_latest_by = ["-created_at"]
 
     def __str__(self):
-        return self.name
+        return self.hash
+
+    def save(self, *args, **kwargs):
+        if not self.hash:
+            self.hash = _create_hash(12)
+        super().save(*args, **kwargs)
