@@ -1,4 +1,5 @@
 # -*- coding: UTF-8 -*-
+from django.contrib.auth import get_user_model
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 from rest_framework.authentication import SessionAuthentication
@@ -18,6 +19,7 @@ from .filters import PostFilter
 from .models import Category
 from .models import Post
 from .models import Tag
+from .serializers import BlogAuthorSerializer
 from .serializers import CategoryListSerializer
 from .serializers import PostDetailSerializer
 from .serializers import PostListSerializer
@@ -66,6 +68,29 @@ class CategoryViewSet(GenericViewSet, ListModelMixin, RetrieveModelMixin):
         return Response(serializer.data)
 
 
+class AuthorViewSet(GenericViewSet, ListModelMixin):
+    serializer_class = BlogAuthorSerializer
+    permission_classes = [HasAPIKey | IsAuthenticated]
+    renderer_classes = [
+        JSONRenderer,
+        BrowsableAPIRenderer,
+    ]
+    authentication_classes = [SessionAuthentication, JWTAuthentication]
+
+    def get_queryset(self):
+        return (
+            get_user_model()
+            .objects.filter(posts__is_published=True)
+            .distinct()
+            .order_by("first_name", "last_name", "id")
+        )
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+
 class PostViewSet(GenericViewSet, ListModelMixin, RetrieveModelMixin):
     queryset = Post.objects.filter(is_published=True)
     serializer_class = PostListSerializer
@@ -90,7 +115,7 @@ class PostViewSet(GenericViewSet, ListModelMixin, RetrieveModelMixin):
         if hasattr(serializer_class, "setup_eager_loading"):
             queryset = serializer_class.setup_eager_loading(queryset=queryset, request=self.request)
 
-        return queryset
+        return queryset.prefetch_related("authors").distinct()
 
     def get_serializer_class(self):
         if self.action == "retrieve":
@@ -113,7 +138,6 @@ class PostViewSet(GenericViewSet, ListModelMixin, RetrieveModelMixin):
         post.views += 1
         post.save()
         return Response({"views": post.views})
-        # return self.retrieve(request, slug)
 
     @action(detail=True, methods=["post"], url_path="increment-likes")
     def increment_likes(self, request, slug=None):
@@ -121,4 +145,3 @@ class PostViewSet(GenericViewSet, ListModelMixin, RetrieveModelMixin):
         post.likes += 1
         post.save()
         return Response({"likes": post.likes})
-        # return self.retrieve(request, slug)

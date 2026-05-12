@@ -49,6 +49,7 @@ class PostAdmin(admin.ModelAdmin):
     ]
 
     list_display_links = ["name"]
+    filter_horizontal = ("tags", "authors")
 
     readonly_fields = [
         "id",
@@ -61,7 +62,7 @@ class PostAdmin(admin.ModelAdmin):
         (None, {"fields": ["id", "name", "slug", "is_published"]}),
         ("Description", {"fields": ["description"], "classes": ["full-width"]}),
         ("Content", {"fields": ["content"], "classes": ["full-width", "full-height"]}),
-        ("Context", {"fields": ["category", "tags"]}),
+        ("Context", {"fields": ["category", "tags", "authors"]}),
         ("Timestamps", {"fields": ["created_at", "updated_at"]}),
         (
             "Metadata",
