@@ -26,6 +26,13 @@ class UserAdmin(BaseUserAdmin):
     ordering = ["-id"]
     search_fields = ["username", "email"]
 
+    fieldsets = (
+        (None, {"fields": ("email", "password")}),
+        ("Personal info", {"fields": ("username", "first_name", "last_name", "linkedin_url")}),
+        ("Permissions", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
+        ("Important dates", {"fields": ("last_login", "date_joined")}),
+    )
+
 
 @admin.register(UserTag)
 class UserTagAdmin(admin.ModelAdmin):

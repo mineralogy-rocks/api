@@ -1,4 +1,5 @@
 # -*- coding: UTF-8 -*-
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from .models import Category
@@ -25,9 +26,31 @@ class CategoryListSerializer(serializers.ModelSerializer):
         ]
 
 
+class PostAuthorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = get_user_model()
+        fields = [
+            "id",
+            "first_name",
+            "last_name",
+            "linkedin_url",
+        ]
+
+
+class BlogAuthorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = get_user_model()
+        fields = [
+            "id",
+            "first_name",
+            "last_name",
+        ]
+
+
 class PostListSerializer(serializers.ModelSerializer):
     tags = TagListSerializer(many=True)
     category = CategoryListSerializer()
+    authors = PostAuthorSerializer(many=True, read_only=True)
     url = serializers.HyperlinkedIdentityField(view_name="blog:post-detail", lookup_field="slug")
 
     class Meta:
@@ -42,6 +65,7 @@ class PostListSerializer(serializers.ModelSerializer):
             "likes",
             "tags",
             "category",
+            "authors",
             "published_at",
         ]
 
@@ -54,6 +78,7 @@ class PostListSerializer(serializers.ModelSerializer):
         ]
         prefetch_related = [
             "tags",
+            "authors",
         ]
 
         queryset = queryset.select_related(*select_related).prefetch_related(*prefetch_related)
@@ -63,6 +88,7 @@ class PostListSerializer(serializers.ModelSerializer):
 class PostDetailSerializer(serializers.ModelSerializer):
     tags = TagListSerializer(many=True)
     category = CategoryListSerializer()
+    authors = PostAuthorSerializer(many=True, read_only=True)
 
     class Meta:
         model = Post
@@ -76,6 +102,7 @@ class PostDetailSerializer(serializers.ModelSerializer):
             "likes",
             "tags",
             "category",
+            "authors",
             "created_at",
             "updated_at",
             "is_published",

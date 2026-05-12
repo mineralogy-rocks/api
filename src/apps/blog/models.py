@@ -3,6 +3,7 @@ from core.models.base import BaseModel
 from core.models.base import Creatable
 from core.models.base import Nameable
 from core.models.base import Updatable
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -40,6 +41,7 @@ class Post(BaseModel, Nameable, Creatable, Updatable):
     likes = models.PositiveIntegerField(default=0)
 
     tags = models.ManyToManyField(Tag, related_name="posts")
+    authors = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="posts", blank=True)
     category = models.ForeignKey(Category, related_name="posts", on_delete=models.SET_NULL, null=True)
 
     is_published = models.BooleanField(default=False)

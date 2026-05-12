@@ -9,7 +9,8 @@ class PostFilter(filters.FilterSet):
         field_name="category__slug",
         lookup_expr="exact",
     )
+    author = filters.NumberFilter(field_name="authors__id", lookup_expr="exact")
 
     class Meta:
         model = Post
-        fields = ["name", "views", "likes", "tags", "category"]
+        fields = ["name", "views", "likes", "tags", "category", "author"]
