@@ -5,7 +5,6 @@ from django.contrib.auth import logout
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q
-from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from rest_framework import viewsets
@@ -14,6 +13,7 @@ from rest_framework.decorators import action
 from rest_framework.decorators import api_view
 from rest_framework.decorators import authentication_classes
 from rest_framework.decorators import permission_classes
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import AllowAny
 from rest_framework.permissions import IsAuthenticated
@@ -38,9 +38,8 @@ from users.serializers import SpaceUpdateSerializer
 from users.serializers import UserSerializer
 from users.serializers import UserTagSerializer
 from users.serializers import UserUpdateSerializer
-from users.services import calculate_expiration_date
-from users.services import generate_invitation_token
 from users.services import generate_password_reset_token
+from users.services import invite_user_to_space
 from users.services import send_invitation_email
 from users.services import send_password_reset_email
 from users.services import validate_invitation_token
@@ -262,60 +261,17 @@ class SpaceViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            user = User.objects.get(email=email)
-            is_new_user = False
-        except User.DoesNotExist:
-            user = User.objects.create_user(
-                email=email,
-                password=None,
-                is_active=False,
-            )
-            is_new_user = True
-
-        existing_invitation = SpaceCollaborator.objects.filter(
-            space=space,
-            user=user,
-        ).first()
-
-        if existing_invitation and existing_invitation.is_accepted:
-            return Response(
-                {"detail": "User is already a collaborator"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        token = generate_invitation_token()
-        invitation_sent_at = timezone.now()
-        invitation_expires_at = calculate_expiration_date(days=7)
+            collaboration, is_new_user = invite_user_to_space(space, email, permission_level, request.user)
+        except DRFValidationError:
+            return Response({"detail": "User is already a collaborator"}, status=status.HTTP_400_BAD_REQUEST)
 
         permission_display = dict(SpaceCollaborator.PERMISSION_CHOICES).get(permission_level)
-
-        if existing_invitation and existing_invitation.is_pending:
-            existing_invitation.invitation_token = token
-            existing_invitation.invitation_sent_at = invitation_sent_at
-            existing_invitation.invitation_expires_at = invitation_expires_at
-            existing_invitation.permission_level = permission_level
-            existing_invitation.invited_by = request.user
-            existing_invitation.save()
-            collaboration = existing_invitation
-        else:
-            collaboration = SpaceCollaborator.objects.create(
-                space=space,
-                user=user,
-                permission_level=permission_level,
-                is_pending=True,
-                is_accepted=None,
-                invitation_token=token,
-                invitation_sent_at=invitation_sent_at,
-                invitation_expires_at=invitation_expires_at,
-                invited_email=email,
-                invited_by=request.user,
-            )
 
         send_invitation_email(
             email=email,
             space=space,
             inviter=request.user,
-            token=token,
+            token=collaboration.invitation_token,
             permission_level_display=permission_display,
             is_new_user=is_new_user,
         )

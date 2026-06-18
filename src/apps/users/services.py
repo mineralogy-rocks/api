@@ -5,9 +5,11 @@ from datetime import timedelta
 from core.utils import send_email
 from django.conf import settings
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
 
 from users.models import PasswordResetToken
 from users.models import SpaceCollaborator
+from users.models import User
 
 
 def generate_invitation_token():
@@ -34,6 +36,49 @@ def send_invitation_email(email, space, inviter, token, permission_level_display
     template = "invitation_email.html"
 
     send_email(subject, template, [email], context)
+
+
+def invite_user_to_space(space, email, permission_level, invited_by):
+    try:
+        user = User.objects.get(email=email)
+        is_new_user = False
+    except User.DoesNotExist:
+        user = User.objects.create_user(email=email, password=None, is_active=False)
+        is_new_user = True
+
+    existing = SpaceCollaborator.objects.filter(space=space, user=user).first()
+
+    if existing and existing.is_accepted:
+        raise ValidationError("User is already a collaborator")
+
+    token = generate_invitation_token()
+    invitation_sent_at = timezone.now()
+    invitation_expires_at = calculate_expiration_date(days=7)
+
+    if existing and existing.is_pending:
+        existing.invitation_token = token
+        existing.invitation_sent_at = invitation_sent_at
+        existing.invitation_expires_at = invitation_expires_at
+        existing.permission_level = permission_level
+        existing.invited_by = invited_by
+        existing.invited_email = email
+        existing.save()
+        collaboration = existing
+    else:
+        collaboration = SpaceCollaborator.objects.create(
+            space=space,
+            user=user,
+            permission_level=permission_level,
+            is_pending=True,
+            is_accepted=None,
+            invitation_token=token,
+            invitation_sent_at=invitation_sent_at,
+            invitation_expires_at=invitation_expires_at,
+            invited_email=email,
+            invited_by=invited_by,
+        )
+
+    return (collaboration, is_new_user)
 
 
 def validate_invitation_token(token):
