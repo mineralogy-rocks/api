@@ -40,7 +40,10 @@ def send_invitation_email(email, space, inviter, token, permission_level_display
 
 def invite_user_to_space(space, email, permission_level, invited_by):
     try:
-        user = User.objects.get(email=email)
+        # Case-insensitive: the serializer normalizes invitee emails to lowercase,
+        # and only the email domain is normalized on user creation, so an exact
+        # match could miss an existing user and mint a near-duplicate account.
+        user = User.objects.get(email__iexact=email)
         is_new_user = False
     except User.DoesNotExist:
         user = User.objects.create_user(email=email, password=None, is_active=False)

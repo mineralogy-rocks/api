@@ -108,6 +108,21 @@ class AtomicCreateWithInviteesTests(TestCase):
         self.assertTrue(collab.invitation_token)
         mock_send.assert_called_once()
 
+    # Inviting an existing user with a different-case email reuses that user (no duplicate).
+    @mock.patch("users.views.send_invitation_email")
+    def test_invite_matches_existing_user_case_insensitively(self, mock_send):
+        existing = User.objects.create_user(email="erin@uni.edu", password="x")
+        space = Space.objects.create(name="S", access=2, owner=self.owner)
+        resp = self.client.post(
+            f"/user/spaces/{space.id}/invite-collaborator/",
+            {"email": "Erin@Uni.edu", "permission_level": 0},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201, resp.content)
+        collab = SpaceCollaborator.objects.get(space=space)
+        self.assertEqual(collab.user_id, existing.id)
+        self.assertEqual(User.objects.filter(email__iexact="erin@uni.edu").count(), 1)
+
     # Pass case 5: email-send failure after commit does not roll back the Space.
     @mock.patch("users.serializers.send_invitation_email", side_effect=Exception("smtp down"))
     def test_email_failure_does_not_rollback(self, mock_send):
