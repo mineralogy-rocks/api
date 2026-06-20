@@ -17,4 +17,4 @@ MINDAT_API_USERNAME=iamuser@only.com
 MINDAT_API_PASSWORD=iamuser
 MINDAT_API_URL=http://api.dev.mindat.org
 
-DJANGO_FIELD_ENCRYPTION_KEY=
+DJANGO_FIELD_ENCRYPTION_KEY=local-dev-field-encryption-key-32b
