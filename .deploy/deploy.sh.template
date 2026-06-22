@@ -132,4 +132,4 @@ docker compose run --rm --no-deps nginx nginx -t </dev/null
 
 
 echo 'Reloading nginx to load new config...'
-docker compose exec -T nginx nginx -s reload
+docker compose restart
