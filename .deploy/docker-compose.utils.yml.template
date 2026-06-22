@@ -1,0 +1,24 @@
+services:
+
+  certbot:
+    image: certbot/dns-route53:v2.5.0
+    platform: linux/amd64
+    restart: 'no'
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      - '${SHARE_PATH}/${APP_NAME}/certbot:/etc/letsencrypt'
+    command: ['certonly', '--dns-route53', '--agree-tos', '--no-eff-email', '--email', '${CERTBOT_EMAIL}', '--cert-name', '${DOMAIN}', '-d', '${DOMAIN}']
+
+  certbot-renew:
+    image: certbot/dns-route53:v2.5.0
+    platform: linux/amd64
+    restart: 'no'
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      - '${SHARE_PATH}/${APP_NAME}/certbot:/etc/letsencrypt'
+    entrypoint: ['certbot']
+    command: ['renew']

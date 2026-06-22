@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+log() { echo "[cert-renew $(date -Iseconds)] $*"; }
+
+log "Running certbot renew for ${APP_NAME}..."
+cd /home/${HOST_USERNAME}/webapp/${APP_NAME}/.deploy
+/usr/bin/docker compose -f compose.utils.yml run --rm --no-deps certbot-renew
+
+
+log "Validating nginx config in the running nginx-server container..."
+cd ${NGINX_SERVER_PATH}
+/usr/bin/docker compose exec -T nginx nginx -t
+
+
+log "Reloading nginx to pick up renewed certs..."
+/usr/bin/docker compose exec -T nginx nginx -s reload
+
+
+log "Done."

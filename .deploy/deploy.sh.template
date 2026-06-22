@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+set -e
+
+if [ ! -d /home/${HOST_USERNAME}/webapp/${APP_NAME}/ ]; then
+    ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+    echo 'Creating application folder...'
+    mkdir -p /home/${HOST_USERNAME}/webapp/${APP_NAME}/
+    cd /home/${HOST_USERNAME}/webapp/${APP_NAME}/
+
+    git clone -b ${BRANCH} git@github.com:${REPOSITORY}.git .
+fi
+
+echo 'Changing directory to project repository...'
+cd /home/${HOST_USERNAME}/webapp/${APP_NAME}/.deploy
+
+
+echo 'Pulling latest source code...'
+git pull
+
+
+export SHARE_PATH=${SHARE_PATH}
+export APP_NAME=${APP_NAME}
+export IMAGE=registry.gitlab.com/mineralogy.rocks/api:${DOCKER_TAG}
+export DOMAIN=${DOMAIN}
+export CERTBOT_EMAIL="${CERTBOT_EMAIL}"
+export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
+export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
+
+export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE}"
+export DJANGO_DEBUG="${DJANGO_DEBUG}"
+export DJANGO_ALLOWED_HOSTS="${DJANGO_ALLOWED_HOSTS}"
+export DJANGO_CORS_ALLOWED_ORIGINS="${DJANGO_CORS_ALLOWED_ORIGINS}"
+export DJANGO_SCHEMA="${DJANGO_SCHEMA}"
+export DJANGO_SENTRY_DSN="${DJANGO_SENTRY_DSN}"
+export SECRET_KEY="${SECRET_KEY}"
+export DJANGO_FIELD_ENCRYPTION_KEY="${DJANGO_FIELD_ENCRYPTION_KEY}"
+
+export DJANGO_DEFAULT_FROM_EMAIL="${DJANGO_DEFAULT_FROM_EMAIL}"
+export DJANGO_FRONTEND_DOMAIN="${DJANGO_FRONTEND_DOMAIN}"
+export DJANGO_BACKEND_DOMAIN="${DJANGO_BACKEND_DOMAIN}"
+export DJANGO_EMAIL_HOST="${DJANGO_EMAIL_HOST}"
+export DJANGO_EMAIL_PORT="${DJANGO_EMAIL_PORT}"
+export DJANGO_EMAIL_HOST_USER="${DJANGO_EMAIL_HOST_USER}"
+export SENDGRID_API_KEY="${SENDGRID_API_KEY}"
+
+export DATABASE_ENGINE="${DATABASE_ENGINE}"
+export POSTGRES_DB="${POSTGRES_DB}"
+export POSTGRES_USER="${POSTGRES_USER}"
+export POSTGRES_PASSWORD="${POSTGRES_PASSWORD}"
+export POSTGRES_HOST="${POSTGRES_HOST}"
+export POSTGRES_PORT="${POSTGRES_PORT}"
+
+export DJANGO_AWS_ACCESS_KEY_ID="${DJANGO_AWS_ACCESS_KEY_ID}"
+export DJANGO_AWS_SECRET_ACCESS_KEY="${DJANGO_AWS_SECRET_ACCESS_KEY}"
+export DJANGO_AWS_STORAGE_BUCKET_NAME="${DJANGO_AWS_STORAGE_BUCKET_NAME}"
+export DJANGO_AWS_S3_ENDPOINT_URL="${DJANGO_AWS_S3_ENDPOINT_URL}"
+
+export MINDAT_API_URL="${MINDAT_API_URL}"
+export MINDAT_API_USERNAME="${MINDAT_API_USERNAME}"
+export MINDAT_API_PASSWORD="${MINDAT_API_PASSWORD}"
+
+export OPEN_AI_API_KEY="${OPEN_AI_API_KEY}"
+
+
+echo 'Preparing compose.yml...'
+envsubst < ./docker-compose.yml.template > compose.yml
+
+echo 'Preparing compose.utils.yml...'
+envsubst < ./docker-compose.utils.yml.template > compose.utils.yml
+
+
+# Vars needed for cron scripts.
+export NGINX_SERVER_PATH=${NGINX_SERVER_PATH}
+export HOST_USERNAME=${HOST_USERNAME}
+
+echo 'Preparing crontab config...'
+envsubst < ./crontab/config.template > ./crontab/config
+
+echo 'Preparing crontab executable...'
+envsubst < ./crontab/bin/cert_renew.template > ./crontab/bin/cert_renew
+chmod +x ./crontab/bin/cert_renew
+
+
+echo 'Setting cronjobs...'
+chmod 644 ./crontab/config
+sudo cp ./crontab/config /etc/cron.d/crontab-config-${APP_NAME}
+sudo chown root:root /etc/cron.d/crontab-config-${APP_NAME}
+
+
+echo 'Tagging current live image with `prev` tag...'
+docker tag registry.gitlab.com/mineralogy.rocks/api:${DOCKER_TAG} registry.gitlab.com/mineralogy.rocks/api:${DOCKER_TAG}-prev || echo 'Missing initial image, skipping...'
+
+
+echo 'Pulling new images...'
+docker pull registry.gitlab.com/mineralogy.rocks/api:${DOCKER_TAG}
+
+
+if [ ! -f ${SHARE_PATH}/${APP_NAME}/certbot/live/${DOMAIN}/fullchain.pem ]; then
+    echo 'Requesting initial certs...'
+    docker compose -f compose.utils.yml run --rm --no-deps certbot </dev/null
+fi
+
+
+if openssl x509 -checkend $((30 * 24 * 3600)) -noout -in "${SHARE_PATH}/${APP_NAME}/certbot/live/${DOMAIN}/fullchain.pem" >/dev/null 2>&1; then
+    echo 'Cert valid for >30 days, skipping renewal. (Weekly cron handles routine renewals.)'
+else
+    echo 'Cert expired or expiring within 30 days — renewing...'
+    docker compose -f compose.utils.yml run --rm --no-deps certbot-renew renew </dev/null
+fi
+
+
+echo 'Removing dangling images...'
+docker image prune -f
+
+
+echo 'Restarting application container...'
+docker compose -f compose.yml up -d
+
+
+echo 'Copying nginx configuration to share path...'
+mkdir -p ${SHARE_PATH}/nginx/sites
+envsubst '$${empty}APP_NAME $${empty}DOMAIN' < ./services/nginx/nginx.template > ${SHARE_PATH}/nginx/sites/${APP_NAME}.conf
+
+
+echo 'Changing directory to nginx-server repository...'
+cd ${NGINX_SERVER_PATH}
+
+
+echo 'Testing configuration...'
+docker compose run --rm --no-deps nginx nginx -t </dev/null
+
+
+echo 'Reloading nginx to load new config...'
+docker compose exec -T nginx nginx -s reload

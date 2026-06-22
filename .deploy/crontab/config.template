@@ -1,0 +1,1 @@
+0 5 * * 1 ${HOST_USERNAME} /home/${HOST_USERNAME}/webapp/${APP_NAME}/.deploy/crontab/bin/cert_renew 2>&1 | /usr/bin/logger -t ${APP_NAME}-cert-renew
