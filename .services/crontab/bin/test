@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-set -e
-
-cd /home/ubuntu/backend
-echo "Testing cron job"
