@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-set -e
-
-cd /home/ubuntu/backend
-/usr/bin/docker compose -f docker-compose.prod.yaml run -T --rm --no-deps backend python manage.py sync_mindat

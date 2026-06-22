@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-set -e
-
-cd /home/ubuntu/backend
-/usr/bin/docker compose -f docker-compose.cert.yaml --env-file ./.envs/.prod/.aws run --rm --no-deps certbot-renew

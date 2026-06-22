@@ -7,4 +7,4 @@ set -o nounset
 python manage.py migrate
 python manage.py collectstatic --noinput
 
-ddtrace-run gunicorn wsgi:application --pythonpath 'src' --bind 0.0.0.0:8000 --worker-class=gevent --worker-connections=500 --workers=3
+gunicorn wsgi:application --pythonpath 'src' --bind 0.0.0.0:8000 --worker-class=gevent --worker-connections=500 --workers=3

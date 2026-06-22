@@ -1,4 +1,0 @@
-# * * * * * ubuntu bash /home/ubuntu/backend/.services/crontab/bin/test 2>&1 | /usr/bin/logger -t backend-test
-
-0 5 * * 2 ubuntu /home/ubuntu/backend/.services/crontab/bin/renew_cert 2>&1 | /usr/bin/logger -t backend-renew-cert
-0 0 * * * ubuntu /home/ubuntu/backend/.services/crontab/bin/sync_mindat 2>&1 | /usr/bin/logger -t backend-sync-mindat
