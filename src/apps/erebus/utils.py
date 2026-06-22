@@ -1,19 +1,16 @@
 # -*- coding: UTF-8 -*-
 import secrets
 
-from django.conf import settings
 from storages.backends.s3boto3 import S3Boto3Storage
 
 
 class ErebusStorage(S3Boto3Storage):
     """
-    Custom S3 storage class for erebus-ai file uploads
-    """
+    Custom S3 storage class for erebus-ai file uploads.
 
-    bucket_name = settings.EREBUS_STORAGE_BUCKET_NAME
-    access_key = settings.EREBUS_ACCESS_KEY_ID
-    secret_key = settings.EREBUS_SECRET_ACCESS_KEY
-    endpoint_url = settings.EREBUS_S3_ENDPOINT_URL
+    Uses the default Django object-storage bucket (DJANGO_AWS_*); only the
+    no-overwrite behaviour is customised.
+    """
 
     file_overwrite = False
 

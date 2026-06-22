@@ -1,0 +1,122 @@
+name: Development Deploy
+
+on:
+  push:
+    branches: [ master ]
+
+  workflow_dispatch:
+
+
+jobs:
+
+  build-container:
+    if: "!contains(github.event.head_commit.message, 'skip ci')"
+    runs-on: ubuntu-latest
+    environment: master
+    continue-on-error: false
+
+    steps:
+      - name: Setting Global Variables
+        run: |
+          DOCKER_TAG=$(echo "${{ github.ref_name }}" | tr '/' '-')
+          echo "DOCKER_TAG=$DOCKER_TAG" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v6
+
+      - uses: docker/login-action@v4
+        with:
+          registry: registry.gitlab.com
+          username: ${{ secrets.GITLAB_USERNAME }}
+          password: ${{ secrets.GITLAB_PASSWORD }}
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build Container
+        uses: docker/build-push-action@v7
+        with:
+          push: true
+          context: .
+          file: ./compose/production/backend/Dockerfile
+          tags: |
+            registry.gitlab.com/mineralogy.rocks/api:${{ github.sha }}
+            registry.gitlab.com/mineralogy.rocks/api:${{ env.DOCKER_TAG }}
+
+  deploy-application:
+    if: "!contains(github.event.head_commit.message, 'skip ci')"
+    runs-on: ubuntu-latest
+    needs: [ build-container ]
+    environment: master
+    continue-on-error: false
+
+    steps:
+      - name: Setting Global Variables
+        run: |
+          DOCKER_TAG=$(echo "${{ github.ref_name }}" | tr '/' '-')
+          echo "DOCKER_TAG=$DOCKER_TAG" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v6
+
+      - name: Prepare SSH Key
+        run: |
+          echo "${{ secrets.SSH_KEY }}" | base64 -d > github_actions.key
+          chmod 400 github_actions.key
+
+      - name: Prepare Deployment Script
+        env:
+          REPOSITORY: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          DOCKER_TAG: ${{ env.DOCKER_TAG }}
+
+          APP_NAME: ${{ vars.APP_NAME }}
+          HOST_USERNAME: ${{ vars.HOST_USERNAME }}
+          SHARE_PATH: ${{ vars.SHARE_PATH }}
+          NGINX_SERVER_PATH: ${{ vars.NGINX_SERVER_PATH }}
+          DOMAIN: ${{ vars.DOMAIN }}
+          CERTBOT_EMAIL: ${{ vars.CERTBOT_EMAIL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+          DJANGO_SETTINGS_MODULE: ${{ vars.DJANGO_SETTINGS_MODULE }}
+          DJANGO_DEBUG: ${{ vars.DJANGO_DEBUG }}
+          DJANGO_ALLOWED_HOSTS: ${{ vars.DJANGO_ALLOWED_HOSTS }}
+          DJANGO_CORS_ALLOWED_ORIGINS: ${{ vars.DJANGO_CORS_ALLOWED_ORIGINS }}
+          DJANGO_SCHEMA: ${{ vars.DJANGO_SCHEMA }}
+          DJANGO_SENTRY_DSN: ${{ secrets.DJANGO_SENTRY_DSN }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          DJANGO_FIELD_ENCRYPTION_KEY: ${{ secrets.DJANGO_FIELD_ENCRYPTION_KEY }}
+
+          DJANGO_DEFAULT_FROM_EMAIL: ${{ vars.DJANGO_DEFAULT_FROM_EMAIL }}
+          DJANGO_FRONTEND_DOMAIN: ${{ vars.DJANGO_FRONTEND_DOMAIN }}
+          DJANGO_BACKEND_DOMAIN: ${{ vars.DJANGO_BACKEND_DOMAIN }}
+          DJANGO_EMAIL_HOST: ${{ vars.DJANGO_EMAIL_HOST }}
+          DJANGO_EMAIL_PORT: ${{ vars.DJANGO_EMAIL_PORT }}
+          DJANGO_EMAIL_HOST_USER: ${{ vars.DJANGO_EMAIL_HOST_USER }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+
+          DATABASE_ENGINE: ${{ vars.DATABASE_ENGINE }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+          POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+
+          DJANGO_AWS_ACCESS_KEY_ID: ${{ secrets.DJANGO_AWS_ACCESS_KEY_ID }}
+          DJANGO_AWS_SECRET_ACCESS_KEY: ${{ secrets.DJANGO_AWS_SECRET_ACCESS_KEY }}
+          DJANGO_AWS_STORAGE_BUCKET_NAME: ${{ secrets.DJANGO_AWS_STORAGE_BUCKET_NAME }}
+          DJANGO_AWS_S3_ENDPOINT_URL: ${{ secrets.DJANGO_AWS_S3_ENDPOINT_URL }}
+
+          MINDAT_API_URL: ${{ vars.MINDAT_API_URL }}
+          MINDAT_API_USERNAME: ${{ secrets.MINDAT_API_USERNAME }}
+          MINDAT_API_PASSWORD: ${{ secrets.MINDAT_API_PASSWORD }}
+
+          OPEN_AI_API_KEY: ${{ secrets.OPEN_AI_API_KEY }}
+        run: |
+          envsubst < ./.deploy/deploy.sh.template > deploy.sh
+
+      - name: Deploy Application
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+              -o ServerAliveInterval=30 \
+              -o ServerAliveCountMax=20 \
+              -o TCPKeepAlive=yes \
+              -i github_actions.key ${{ vars.HOST_USERNAME }}@${{ vars.HOST }} < deploy.sh

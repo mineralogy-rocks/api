@@ -34,7 +34,7 @@ services:
             context: .
             dockerfile: ./compose/production/backend/Dockerfile
         restart: always
-        image: registry.gitlab.com/mineralogy.rocks/mr-api/backend:latest
+        image: registry.gitlab.com/mineralogy.rocks/api:latest
         command: /start
         volumes:
             - .:/app
