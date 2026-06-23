@@ -1,3 +1,14 @@
+# Per-site server block for ${APP_NAME}, rendered by deploy.sh (envsubst on
+# $APP_NAME / $DOMAIN) into the shared nginx-server sites dir as
+# nginx/sites/${APP_NAME}.conf and included at http context.
+#
+# The shared nginx.conf already provides: gzip on, resolver 127.0.0.11,
+# mime.types and logging. Every http-context zone declared here is
+# ${APP_NAME}-prefixed so co-hosted apps never collide in the shared http block.
+
+limit_req_zone $binary_remote_addr zone=${APP_NAME}_req:10m rate=10r/s;
+limit_conn_zone $binary_remote_addr zone=${APP_NAME}_conn:10m;
+
 server {
     listen 80;
     server_name ${DOMAIN};
@@ -16,14 +27,45 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256;
     ssl_prefer_server_ciphers on;
-    ssl_session_cache shared:SSL:10m;
+    ssl_ecdh_curve X25519;
+    ssl_session_cache shared:${APP_NAME}_ssl:10m;
+    ssl_session_timeout 1440m;
+    ssl_session_tickets off;
 
     ssl_certificate /share/${APP_NAME}/certbot/live/${DOMAIN}/fullchain.pem;
     ssl_certificate_key /share/${APP_NAME}/certbot/live/${DOMAIN}/privkey.pem;
+    ssl_trusted_certificate /share/${APP_NAME}/certbot/live/${DOMAIN}/chain.pem;
 
-    ssl_session_timeout 1440m;
+    # OCSP stapling (resolver comes from the shared nginx.conf).
+    ssl_stapling on;
+    ssl_stapling_verify on;
+
+    server_tokens off;
 
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # gzip is enabled globally; extend it to the JSON API payloads.
+    gzip_comp_level 5;
+    gzip_min_length 256;
+    gzip_proxied any;
+    gzip_vary on;
+    gzip_types
+        application/atom+xml
+        application/geo+json
+        application/json
+        application/ld+json
+        application/manifest+json
+        application/rdf+xml
+        application/vnd.api+json
+        application/xml
+        image/svg+xml
+        text/css
+        text/javascript
+        text/plain
+        text/xml;
 
     location / {
         proxy_http_version 1.1;
@@ -37,6 +79,11 @@ server {
 
         proxy_buffer_size 16k;
         proxy_buffers 4 16k;
+
+        limit_req zone=${APP_NAME}_req burst=20 nodelay;
+        limit_req_status 429;
+        limit_req_log_level warn;
+        limit_conn ${APP_NAME}_conn 20;
 
         set $upstream ${APP_NAME}:8000;
         proxy_pass http://$upstream;
