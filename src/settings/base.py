@@ -47,10 +47,6 @@ LOGGING = {
         "django.db.backends": {
             "level": "DEBUG",
         },
-        "ddtrace": {
-            "handlers": ["console"],
-            "level": "WARNING",
-        },
     },
 }
 
