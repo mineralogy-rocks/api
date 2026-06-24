@@ -14,11 +14,14 @@ SECRET_KEY = os.environ.get("SECRET_KEY")
 
 DEBUG = os.environ.get("DJANGO_DEBUG", default=0) == "True"
 
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", default="").split(",")
+ALLOWED_HOSTS = [h for h in os.environ.get("DJANGO_ALLOWED_HOSTS", default="").split(",") if h]
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-CORS_ALLOWED_ORIGINS = os.environ.get("DJANGO_CORS_ALLOWED_ORIGINS", default="").split(",")
+CORS_ALLOWED_ORIGINS = [o for o in os.environ.get("DJANGO_CORS_ALLOWED_ORIGINS", default="").split(",") if o]
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r for r in os.environ.get("DJANGO_CORS_ALLOWED_ORIGIN_REGEXES", default="").split(",") if r
+]
 CORS_ALLOW_CREDENTIALS = True
 
 DEFAULT_FROM_EMAIL = os.environ.get("DJANGO_DEFAULT_FROM_EMAIL")
@@ -74,6 +77,7 @@ INSTALLED_APPS = [
     "blog",
     "erebus",
     "users",
+    "store",
 ]
 
 MIDDLEWARE = [
@@ -248,3 +252,10 @@ SPECTACULAR_SETTINGS = {
 
 
 FIELD_ENCRYPTION_KEY = os.environ.get("DJANGO_FIELD_ENCRYPTION_KEY")
+
+GEMS_S3_ENDPOINT_URL = os.environ.get("DJANGO_GEMS_S3_ENDPOINT_URL", default="https://gems.s3.local")
+GEMS_S3_BUCKET = os.environ.get("DJANGO_GEMS_S3_BUCKET", default="gems-dev")
+GEMS_S3_ACCESS_KEY = os.environ.get("DJANGO_GEMS_S3_ACCESS_KEY", default="gems-dev-access-key")
+GEMS_S3_SECRET_KEY = os.environ.get("DJANGO_GEMS_S3_SECRET_KEY", default="gems-dev-secret-key")
+GEMS_S3_REGION = os.environ.get("DJANGO_GEMS_S3_REGION", default="eu-central")
+GEMS_SIGNED_URL_EXPIRE = int(os.environ.get("DJANGO_GEMS_SIGNED_URL_EXPIRE", default="3600"))

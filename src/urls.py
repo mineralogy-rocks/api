@@ -25,6 +25,7 @@ urlpatterns = [
     path("user/", include("users.urls"), name="users"),
     path("blog/", include("blog.urls"), name="blog"),
     path("erebus/", include("erebus.urls"), name="erebus"),
+    path("store/", include("store.urls"), name="store"),
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
         "schema/swagger-ui/",
