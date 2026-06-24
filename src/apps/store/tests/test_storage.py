@@ -1,17 +1,11 @@
 from django.test import SimpleTestCase
 
-from store.storage import public_url
 from store.storage import signed_url
 
 
-class GemsStorageUrlTests(SimpleTestCase):
-    def test_public_url_is_stable_and_unsigned(self):
-        url = public_url("sample.jpg")
-        self.assertIn("gems/sample.jpg", url)
-        self.assertNotIn("X-Amz-Signature", url)
-
-    def test_private_url_is_signed_and_expiring(self):
+class StoreStorageUrlTests(SimpleTestCase):
+    def test_signed_url_is_namespaced_and_signed(self):
         url = signed_url("sample.jpg")
-        self.assertIn("gems/sample.jpg", url)
-        self.assertIn("X-Amz-Signature", url)
-        self.assertTrue("X-Amz-Expires" in url or "Expires" in url)
+        self.assertIn("store/sample.jpg", url)
+        self.assertTrue("X-Amz-Signature" in url or "Signature=" in url)
+        self.assertTrue("X-Amz-Expires" in url or "Expires=" in url)

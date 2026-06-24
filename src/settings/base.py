@@ -229,13 +229,11 @@ SIMPLE_JWT = {
     "JTI_CLAIM": "jti",
 }
 
-# Session security settings
 SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_AGE = 1209600  # 2 weeks
 
-# CSRF security settings
 CSRF_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = "Lax"
@@ -253,9 +251,9 @@ SPECTACULAR_SETTINGS = {
 
 FIELD_ENCRYPTION_KEY = os.environ.get("DJANGO_FIELD_ENCRYPTION_KEY")
 
-GEMS_S3_ENDPOINT_URL = os.environ.get("DJANGO_GEMS_S3_ENDPOINT_URL", default="https://gems.s3.local")
-GEMS_S3_BUCKET = os.environ.get("DJANGO_GEMS_S3_BUCKET", default="gems-dev")
-GEMS_S3_ACCESS_KEY = os.environ.get("DJANGO_GEMS_S3_ACCESS_KEY", default="gems-dev-access-key")
-GEMS_S3_SECRET_KEY = os.environ.get("DJANGO_GEMS_S3_SECRET_KEY", default="gems-dev-secret-key")
-GEMS_S3_REGION = os.environ.get("DJANGO_GEMS_S3_REGION", default="eu-central")
-GEMS_SIGNED_URL_EXPIRE = int(os.environ.get("DJANGO_GEMS_SIGNED_URL_EXPIRE", default="3600"))
+AWS_ACCESS_KEY_ID = os.environ.get("DJANGO_AWS_ACCESS_KEY_ID", default="dev-access-key")
+AWS_SECRET_ACCESS_KEY = os.environ.get("DJANGO_AWS_SECRET_ACCESS_KEY", default="dev-secret-key")
+AWS_STORAGE_BUCKET_NAME = os.environ.get("DJANGO_AWS_STORAGE_BUCKET_NAME", default="mr-dev")
+AWS_S3_ENDPOINT_URL = os.environ.get("DJANGO_AWS_S3_ENDPOINT_URL", default="https://s3.local")
+
+STORE_SIGNED_URL_EXPIRE = int(os.environ.get("DJANGO_STORE_SIGNED_URL_EXPIRE", default="3600"))

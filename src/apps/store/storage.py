@@ -1,55 +1,38 @@
 from django.conf import settings
 from storages.backends.s3boto3 import S3Boto3Storage
 
-GEMS_LOCATION = "gems"
+STORE_LOCATION = "store"
 
 
-class _BaseGemsStorage(S3Boto3Storage):
+class StoreStorage(S3Boto3Storage):
+    """
+    Store files on the shared Hetzner bucket (DJANGO_AWS_*) under the store/
+    prefix.
+
+    The bucket stays private; every read is mediated by the backend, which
+    issues a short-lived signed URL after its own availability/permission
+    checks. Bucket, endpoint and credentials are inherited from the AWS_*
+    settings, so only the store-specific behaviour is set here.
+    """
+
+    location = STORE_LOCATION
+    default_acl = None
+    querystring_auth = True
+    file_overwrite = False
+
     def __init__(self, **kwargs):
-        kwargs.setdefault("bucket_name", settings.GEMS_S3_BUCKET)
-        kwargs.setdefault("endpoint_url", settings.GEMS_S3_ENDPOINT_URL)
-        kwargs.setdefault("access_key", settings.GEMS_S3_ACCESS_KEY)
-        kwargs.setdefault("secret_key", settings.GEMS_S3_SECRET_KEY)
-        kwargs.setdefault("region_name", settings.GEMS_S3_REGION)
-        kwargs.setdefault("location", GEMS_LOCATION)
-        kwargs.setdefault("file_overwrite", False)
+        kwargs.setdefault("querystring_expire", settings.STORE_SIGNED_URL_EXPIRE)
         super().__init__(**kwargs)
 
 
-class PublicGemsStorage(_BaseGemsStorage):
-    def __init__(self, **kwargs):
-        kwargs.setdefault("querystring_auth", False)
-        kwargs.setdefault("default_acl", "public-read")
-        super().__init__(**kwargs)
+storage = StoreStorage()
 
 
-class PrivateGemsStorage(_BaseGemsStorage):
-    def __init__(self, **kwargs):
-        kwargs.setdefault("querystring_auth", True)
-        kwargs.setdefault("querystring_expire", settings.GEMS_SIGNED_URL_EXPIRE)
-        kwargs.setdefault("default_acl", None)
-        super().__init__(**kwargs)
-
-
-public_storage = PublicGemsStorage()
-private_storage = PrivateGemsStorage()
-
-
-def store_public(file, name):
-    """Save `file` under the gems/ prefix as a public object; return its name."""
-    return public_storage.save(name, file)
-
-
-def store_private(file, name):
-    """Save `file` under the gems/ prefix as a private object; return its name."""
-    return private_storage.save(name, file)
-
-
-def public_url(name):
-    """Return a stable, unsigned URL for a public gems file."""
-    return public_storage.url(name)
+def store_file(file, name):
+    """Save `file` under the store/ prefix; return its stored name."""
+    return storage.save(name, file)
 
 
 def signed_url(name):
-    """Return a short-lived, signed URL for a private gems file."""
-    return private_storage.url(name)
+    """Return a short-lived, signed URL for a store file."""
+    return storage.url(name)
