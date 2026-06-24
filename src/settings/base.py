@@ -14,11 +14,14 @@ SECRET_KEY = os.environ.get("SECRET_KEY")
 
 DEBUG = os.environ.get("DJANGO_DEBUG", default=0) == "True"
 
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", default="").split(",")
+ALLOWED_HOSTS = [h for h in os.environ.get("DJANGO_ALLOWED_HOSTS", default="").split(",") if h]
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-CORS_ALLOWED_ORIGINS = os.environ.get("DJANGO_CORS_ALLOWED_ORIGINS", default="").split(",")
+CORS_ALLOWED_ORIGINS = [o for o in os.environ.get("DJANGO_CORS_ALLOWED_ORIGINS", default="").split(",") if o]
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r for r in os.environ.get("DJANGO_CORS_ALLOWED_ORIGIN_REGEXES", default="").split(",") if r
+]
 CORS_ALLOW_CREDENTIALS = True
 
 DEFAULT_FROM_EMAIL = os.environ.get("DJANGO_DEFAULT_FROM_EMAIL")
@@ -74,6 +77,7 @@ INSTALLED_APPS = [
     "blog",
     "erebus",
     "users",
+    "store",
 ]
 
 MIDDLEWARE = [
@@ -225,13 +229,11 @@ SIMPLE_JWT = {
     "JTI_CLAIM": "jti",
 }
 
-# Session security settings
 SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_AGE = 1209600  # 2 weeks
 
-# CSRF security settings
 CSRF_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = "Lax"
@@ -248,3 +250,10 @@ SPECTACULAR_SETTINGS = {
 
 
 FIELD_ENCRYPTION_KEY = os.environ.get("DJANGO_FIELD_ENCRYPTION_KEY")
+
+AWS_ACCESS_KEY_ID = os.environ.get("DJANGO_AWS_ACCESS_KEY_ID", default="dev-access-key")
+AWS_SECRET_ACCESS_KEY = os.environ.get("DJANGO_AWS_SECRET_ACCESS_KEY", default="dev-secret-key")
+AWS_STORAGE_BUCKET_NAME = os.environ.get("DJANGO_AWS_STORAGE_BUCKET_NAME", default="mr-dev")
+AWS_S3_ENDPOINT_URL = os.environ.get("DJANGO_AWS_S3_ENDPOINT_URL", default="https://s3.local")
+
+STORE_SIGNED_URL_EXPIRE = int(os.environ.get("DJANGO_STORE_SIGNED_URL_EXPIRE", default="3600"))
