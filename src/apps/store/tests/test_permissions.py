@@ -1,0 +1,71 @@
+from unittest.mock import patch
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from rest_framework import status
+from rest_framework.test import APITestCase
+from rest_framework_simplejwt.tokens import RefreshToken
+from users.models import User
+
+
+def get_jwt_for_user(user):
+    refresh = RefreshToken.for_user(user)
+    return str(refresh.access_token)
+
+
+class StoreMePermissionTests(APITestCase):
+    def setUp(self):
+        self.url = "/store/me/"
+        self.user = User.objects.create_user(email="authed@example.com", password="pass123")
+        self.user.is_active = True
+        self.user.is_staff = False
+        self.user.save()
+
+    def test_anonymous_returns_401(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_authenticated_returns_200_with_is_staff(self):
+        token = get_jwt_for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("is_staff", response.data)
+
+
+class FileUploadPermissionTests(APITestCase):
+    def setUp(self):
+        self.url = "/store/files/"
+        self.non_staff_user = User.objects.create_user(email="regular@example.com", password="pass123")
+        self.non_staff_user.is_active = True
+        self.non_staff_user.is_staff = False
+        self.non_staff_user.save()
+
+        self.staff_user = User.objects.create_user(email="staff@example.com", password="pass123")
+        self.staff_user.is_active = True
+        self.staff_user.is_staff = True
+        self.staff_user.save()
+
+    def test_anonymous_returns_401(self):
+        response = self.client.post(self.url, {}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_non_staff_returns_403(self):
+        token = get_jwt_for_user(self.non_staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        file = SimpleUploadedFile("test.txt", b"hello", content_type="text/plain")
+        response = self.client.post(self.url, {"file": file}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    @patch("store.views.store_file")
+    @patch("store.views.signed_url")
+    def test_staff_returns_201(self, mock_signed_url, mock_store_file):
+        mock_store_file.return_value = "store/test.txt"
+        mock_signed_url.return_value = "https://example.com/signed/test.txt"
+
+        token = get_jwt_for_user(self.staff_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        file = SimpleUploadedFile("test.txt", b"hello", content_type="text/plain")
+        response = self.client.post(self.url, {"file": file}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("name", response.data)
+        self.assertIn("url", response.data)

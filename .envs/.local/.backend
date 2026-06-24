@@ -17,3 +17,9 @@ MINDAT_API_PASSWORD=iamuser
 MINDAT_API_URL=http://api.dev.mindat.org
 
 DJANGO_FIELD_ENCRYPTION_KEY=local-dev-field-encryption-key-32b
+
+DJANGO_GOOGLE_OAUTH2_KEY=
+DJANGO_GOOGLE_OAUTH2_SECRET=
+DJANGO_AUTH_EMAIL_ALLOWLIST=liubomyr.gavryliv@gmail.com
+DJANGO_AUTH_FRONTEND_CALLBACK_URL=http://gemsla.be.local/auth/callback
+DJANGO_AUTH_LOGIN_ERROR_URL=http://gemsla.be.local/auth/sign-in?error=auth
