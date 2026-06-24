@@ -1,4 +1,7 @@
 # -*- coding: UTF-8 -*-
+import logging
+
+from django.db import transaction
 from django.db.models import Prefetch
 from django.utils import timezone
 from rest_framework import serializers
@@ -9,6 +12,10 @@ from users.models import Space
 from users.models import SpaceCollaborator
 from users.models import User
 from users.models import UserTag
+from users.services import invite_user_to_space
+from users.services import send_invitation_email
+
+logger = logging.getLogger(__name__)
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -242,6 +249,21 @@ class SpaceSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
+class SpaceInviteeSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    permission_level = serializers.IntegerField(required=True)
+
+    def validate_permission_level(self, value):
+        valid_levels = [
+            SpaceCollaborator.PERMISSION_VIEWER,
+            SpaceCollaborator.PERMISSION_ADMIN,
+            SpaceCollaborator.PERMISSION_SUPERADMIN,
+        ]
+        if value not in valid_levels:
+            raise serializers.ValidationError("Invalid permission level")
+        return value
+
+
 class SpaceCreateSerializer(serializers.ModelSerializer):
     tag_ids = serializers.PrimaryKeyRelatedField(
         queryset=UserTag.objects.none(),
@@ -249,10 +271,11 @@ class SpaceCreateSerializer(serializers.ModelSerializer):
         source="tags",
         required=False,
     )
+    invitees = SpaceInviteeSerializer(many=True, required=False, write_only=True)
 
     class Meta:
         model = Space
-        fields = ["id", "name", "description", "access", "tag_ids"]
+        fields = ["id", "name", "description", "access", "tag_ids", "invitees"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -260,9 +283,68 @@ class SpaceCreateSerializer(serializers.ModelSerializer):
         if request and hasattr(request, "user") and request.user.is_authenticated:
             self.fields["tag_ids"].child_relation.queryset = UserTag.objects.filter(user=request.user)
 
+    def validate(self, attrs):
+        invitees = attrs.get("invitees", [])
+        if not invitees:
+            return attrs
+
+        owner_email = self.context["request"].user.email.lower()
+        seen_emails = {}
+        errors = [{} for _ in invitees]
+        has_errors = False
+
+        for i, inv in enumerate(invitees):
+            email_lower = inv["email"].lower()
+            if email_lower == owner_email:
+                errors[i]["email"] = "You cannot invite yourself."
+                has_errors = True
+            elif email_lower in seen_emails:
+                errors[i]["email"] = "Duplicate email in invitees."
+                has_errors = True
+            else:
+                seen_emails[email_lower] = i
+
+        if has_errors:
+            raise serializers.ValidationError({"invitees": errors})
+
+        return attrs
+
     def create(self, validated_data):
+        invitees = validated_data.pop("invitees", [])
         validated_data["owner"] = self.context["request"].user
-        return super().create(validated_data)
+        request_user = self.context["request"].user
+
+        send_list = []
+
+        with transaction.atomic():
+            space = super().create(validated_data)
+            for inv in invitees:
+                collaboration, is_new_user = invite_user_to_space(
+                    space=space,
+                    email=inv["email"],
+                    permission_level=inv["permission_level"],
+                    invited_by=request_user,
+                )
+                permission_display = dict(SpaceCollaborator.PERMISSION_CHOICES).get(inv["permission_level"])
+                send_list.append((inv["email"], collaboration.invitation_token, permission_display, is_new_user))
+
+            def send_emails():
+                for email, token, permission_display, is_new_user in send_list:
+                    try:
+                        send_invitation_email(
+                            email=email,
+                            space=space,
+                            inviter=request_user,
+                            token=token,
+                            permission_level_display=permission_display,
+                            is_new_user=is_new_user,
+                        )
+                    except Exception:
+                        logger.exception("Failed to send invitation email to %s for space %s", email, space.id)
+
+            transaction.on_commit(send_emails)
+
+        return space
 
 
 class SpaceUpdateSerializer(serializers.ModelSerializer):
