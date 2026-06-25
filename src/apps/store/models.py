@@ -75,8 +75,10 @@ class StoneTreatment(Creatable, Updatable):
 
 class Stone(Creatable, Updatable):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
     name = models.CharField(max_length=255)
     description = models.TextField(null=True, blank=True)
+
     mineral = models.CharField(max_length=100, null=True, blank=True)
     item_number = models.CharField(max_length=100, null=True, blank=True)
     color = models.ForeignKey(

@@ -11,12 +11,15 @@ class NumberInFilter(filters.BaseInFilter, filters.NumberFilter):
 class StoneFilter(filters.FilterSet):
     min_price = filters.NumberFilter(field_name="selling_price", lookup_expr="gte")
     max_price = filters.NumberFilter(field_name="selling_price", lookup_expr="lte")
+
     min_weight = filters.NumberFilter(field_name="weight_carats", lookup_expr="gte")
     max_weight = filters.NumberFilter(field_name="weight_carats", lookup_expr="lte")
+
     color = NumberInFilter(field_name="color_id", lookup_expr="in")
     cut = NumberInFilter(field_name="cut_id", lookup_expr="in")
     treatment = filters.NumberFilter(field_name="treatment_id")
     untreated = filters.BooleanFilter(method="filter_untreated")
+
     is_sold = filters.BooleanFilter()
     is_selling = filters.BooleanFilter()
 
