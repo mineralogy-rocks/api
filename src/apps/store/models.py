@@ -1,5 +1,6 @@
 # -*- coding: UTF-8 -*-
 import uuid
+from decimal import Decimal
 
 from core.models.base import Creatable
 from core.models.base import Updatable
@@ -131,7 +132,7 @@ class Stone(Creatable, Updatable):
     def _compute_gross(self):
         for cur in ("usd", "eur"):
             parts = [getattr(self, f"{p}_{cur}") for p in ("price", "shipment", "vat")]
-            present = [p for p in parts if p is not None]
+            present = [Decimal(str(p)) for p in parts if p is not None]
             setattr(self, f"gross_{cur}", sum(present) if present else None)
 
     def save(self, *args, **kwargs):
