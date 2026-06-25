@@ -21,7 +21,7 @@ jobs:
           DOCKER_TAG=$(echo "${{ github.ref_name }}" | tr '/' '-')
           echo "DOCKER_TAG=$DOCKER_TAG" >> "$GITHUB_ENV"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: docker/login-action@v4
         with:
@@ -54,7 +54,7 @@ jobs:
           DOCKER_TAG=$(echo "${{ github.ref_name }}" | tr '/' '-')
           echo "DOCKER_TAG=$DOCKER_TAG" >> "$GITHUB_ENV"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Prepare SSH Key
         run: |
