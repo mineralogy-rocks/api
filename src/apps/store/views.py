@@ -6,7 +6,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.authentication import JWTAuthentication
+from users.authentication import CsrfExemptSessionAuthentication
 from users.permissions import IsStaff
 
 from store.storage import signed_url
@@ -25,7 +25,7 @@ class PingView(APIView):
 
 
 class StoreMeView(APIView):
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [CsrfExemptSessionAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -43,7 +43,7 @@ class StoreMeView(APIView):
 
 
 class FileUploadView(APIView):
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [CsrfExemptSessionAuthentication]
     permission_classes = [IsStaff]
     parser_classes = [MultiPartParser, FormParser]
 
@@ -59,7 +59,7 @@ class FileUploadView(APIView):
 
 
 class SignedUrlView(APIView):
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [CsrfExemptSessionAuthentication]
     permission_classes = [IsStaff]
 
     def get(self, request, key):

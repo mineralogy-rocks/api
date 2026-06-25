@@ -51,19 +51,19 @@ class GrantStaffTests(APITestCase):
         self.assertIsNone(result)
 
 
-class TokenExchangeViewTests(APITestCase):
+class SessionExchangeViewTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="active@example.com", password="testpass123")
         self.user.is_active = True
         self.user.save()
-        self.url = "/auth/token/exchange/"
+        self.url = "/auth/session/"
 
-    def test_valid_ott_returns_jwt_pair(self):
+    def test_valid_ott_establishes_session(self):
         token = str(OneTimeToken.for_user(self.user))
         response = self.client.post(self.url, {"token": token}, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("access", response.data)
-        self.assertIn("refresh", response.data)
+        self.assertIn("sessionid", response.cookies)
+        self.assertEqual(response.data["email"], self.user.email)
 
     def test_second_use_returns_400(self):
         token = str(OneTimeToken.for_user(self.user))

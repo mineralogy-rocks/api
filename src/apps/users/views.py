@@ -21,8 +21,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
-from rest_framework_simplejwt.tokens import RefreshToken
 
+from users.authentication import CsrfExemptSessionAuthentication
 from users.models import Space
 from users.models import SpaceCollaborator
 from users.models import User
@@ -49,11 +49,6 @@ from users.services import send_password_reset_email
 from users.services import validate_invitation_token
 from users.services import validate_password_reset_token
 from users.tokens import OneTimeToken
-
-
-class CsrfExemptSessionAuthentication(SessionAuthentication):
-    def enforce_csrf(self, request):
-        return
 
 
 class SpacePagination(LimitOffsetPagination):
@@ -559,7 +554,7 @@ class InvitationViewSet(viewsets.GenericViewSet):
         invitation.is_accepted = True
         invitation.save()
 
-        login(request, user)
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
 
         return Response(
             {
@@ -666,12 +661,12 @@ class PasswordResetViewSet(viewsets.GenericViewSet):
         _token.is_used = True
         _token.save()
 
-        login(request, user)
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
 
         return Response({"detail": "Password has been reset successfully"}, status=status.HTTP_200_OK)
 
 
-class TokenExchangeView(APIView):
+class SessionExchangeView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
@@ -695,5 +690,6 @@ class TokenExchangeView(APIView):
         except User.DoesNotExist:
             return Response({"detail": "User not found"}, status=status.HTTP_400_BAD_REQUEST)
 
-        refresh = RefreshToken.for_user(user)
-        return Response({"access": str(refresh.access_token), "refresh": str(refresh)}, status=status.HTTP_200_OK)
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        serializer = UserSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)

@@ -3,13 +3,7 @@ from unittest.mock import patch
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
-from rest_framework_simplejwt.tokens import RefreshToken
 from users.models import User
-
-
-def get_jwt_for_user(user):
-    refresh = RefreshToken.for_user(user)
-    return str(refresh.access_token)
 
 
 class StoreMePermissionTests(APITestCase):
@@ -20,13 +14,12 @@ class StoreMePermissionTests(APITestCase):
         self.user.is_staff = False
         self.user.save()
 
-    def test_anonymous_returns_401(self):
+    def test_anonymous_returns_403(self):
         response = self.client.get(self.url)
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_authenticated_returns_200_with_is_staff(self):
-        token = get_jwt_for_user(self.user)
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.client.force_login(self.user)
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("is_staff", response.data)
@@ -45,13 +38,12 @@ class FileUploadPermissionTests(APITestCase):
         self.staff_user.is_staff = True
         self.staff_user.save()
 
-    def test_anonymous_returns_401(self):
+    def test_anonymous_returns_403(self):
         response = self.client.post(self.url, {}, format="multipart")
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_non_staff_returns_403(self):
-        token = get_jwt_for_user(self.non_staff_user)
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.client.force_login(self.non_staff_user)
         file = SimpleUploadedFile("test.txt", b"hello", content_type="text/plain")
         response = self.client.post(self.url, {"file": file}, format="multipart")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -62,8 +54,7 @@ class FileUploadPermissionTests(APITestCase):
         mock_store_file.return_value = "store/test.txt"
         mock_signed_url.return_value = "https://example.com/signed/test.txt"
 
-        token = get_jwt_for_user(self.staff_user)
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.client.force_login(self.staff_user)
         file = SimpleUploadedFile("test.txt", b"hello", content_type="text/plain")
         response = self.client.post(self.url, {"file": file}, format="multipart")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
