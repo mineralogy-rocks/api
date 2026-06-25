@@ -78,6 +78,7 @@ INSTALLED_APPS = [
     "erebus",
     "users",
     "store",
+    "social_django",
 ]
 
 MIDDLEWARE = [
@@ -89,6 +90,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "social_django.middleware.SocialAuthExceptionMiddleware",
 ]
 
 CACHES = {
@@ -118,6 +120,8 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "social_django.context_processors.backends",
+                "social_django.context_processors.login_redirect",
             ],
         },
     },
@@ -155,6 +159,11 @@ DATABASES = {
 }
 
 AUTH_USER_MODEL = "users.User"
+
+AUTHENTICATION_BACKENDS = [
+    "social_core.backends.google.GoogleOAuth2",
+    "django.contrib.auth.backends.ModelBackend",
+]
 
 # Password validation
 # https://docs.djangoproject.com/en/3.1/ref/settings/#auth-password-validators
@@ -257,3 +266,40 @@ AWS_STORAGE_BUCKET_NAME = os.environ.get("DJANGO_AWS_STORAGE_BUCKET_NAME", defau
 AWS_S3_ENDPOINT_URL = os.environ.get("DJANGO_AWS_S3_ENDPOINT_URL", default="https://s3.local")
 
 STORE_SIGNED_URL_EXPIRE = int(os.environ.get("DJANGO_STORE_SIGNED_URL_EXPIRE", default="3600"))
+
+SOCIAL_AUTH_JSONFIELD_ENABLED = True
+SOCIAL_AUTH_RAISE_EXCEPTIONS = False
+SOCIAL_AUTH_REDIRECT_IS_HTTPS = SCHEMA == "https"
+
+SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = os.environ.get("DJANGO_GOOGLE_OAUTH2_KEY", default="")
+SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = os.environ.get("DJANGO_GOOGLE_OAUTH2_SECRET", default="")
+SOCIAL_AUTH_GOOGLE_OAUTH2_SCOPE = [
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+]
+SOCIAL_AUTH_GOOGLE_OAUTH2_USER_FIELDS = ["email", "first_name", "last_name"]
+
+AUTH_EMAIL_ALLOWLIST = [
+    e.strip().lower() for e in os.environ.get("DJANGO_AUTH_EMAIL_ALLOWLIST", default="").split(",") if e.strip()
+]
+AUTH_FRONTEND_CALLBACK_URL = os.environ.get(
+    "DJANGO_AUTH_FRONTEND_CALLBACK_URL", default="http://gemsla.be.local/auth/callback"
+)
+SOCIAL_AUTH_LOGIN_ERROR_URL = os.environ.get(
+    "DJANGO_AUTH_LOGIN_ERROR_URL", default="http://gemsla.be.local/auth/sign-in?error=auth"
+)
+
+SOCIAL_AUTH_PIPELINE = (
+    "social_core.pipeline.social_auth.social_details",
+    "social_core.pipeline.social_auth.social_uid",
+    "social_core.pipeline.social_auth.auth_allowed",
+    "users.pipeline.require_allowlisted_email",
+    "social_core.pipeline.social_auth.social_user",
+    "social_core.pipeline.user.get_username",
+    "social_core.pipeline.user.create_user",
+    "users.pipeline.grant_staff",
+    "social_core.pipeline.social_auth.associate_user",
+    "social_core.pipeline.social_auth.load_extra_data",
+    "social_core.pipeline.user.user_details",
+    "users.pipeline.issue_token_and_redirect",
+)

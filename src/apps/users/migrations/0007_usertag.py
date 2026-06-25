@@ -51,7 +51,10 @@ class Migration(migrations.Migration):
                 ),
             ],
             database_operations=[
-                # No-op: M2M table was already dropped
+                migrations.RunSQL(
+                    sql="DROP TABLE IF EXISTS users_space_tags;",
+                    reverse_sql=migrations.RunSQL.noop,
+                ),
             ],
         ),
         # Add new tags field pointing to UserTag

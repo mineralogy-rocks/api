@@ -15,6 +15,11 @@ class Migration(migrations.Migration):
                     name="SpaceTag",
                 ),
             ],
-            database_operations=[],
+            database_operations=[
+                migrations.RunSQL(
+                    sql="DROP TABLE IF EXISTS users_spacetag;",
+                    reverse_sql=migrations.RunSQL.noop,
+                ),
+            ],
         ),
     ]
