@@ -46,10 +46,11 @@ class StoneFilter(filters.FilterSet):
 class ReportFilter(filters.FilterSet):
     public = filters.BooleanFilter()
     unlinked = filters.BooleanFilter(method="filter_unlinked")
+    linked_stone = filters.UUIDFilter(field_name="linked_stone_id")
 
     class Meta:
         model = Report
-        fields = ["public", "unlinked"]
+        fields = ["public", "unlinked", "linked_stone"]
 
     def filter_unlinked(self, queryset, name, value):
         if value:
