@@ -267,6 +267,8 @@ AWS_S3_ENDPOINT_URL = os.environ.get("DJANGO_AWS_S3_ENDPOINT_URL", default="http
 
 STORE_SIGNED_URL_EXPIRE = int(os.environ.get("DJANGO_STORE_SIGNED_URL_EXPIRE", default="3600"))
 
+GEMS_SITE_URL = os.environ.get("DJANGO_GEMS_SITE_URL", default="https://gemsla.be")
+
 SOCIAL_AUTH_JSONFIELD_ENABLED = True
 SOCIAL_AUTH_RAISE_EXCEPTIONS = False
 SOCIAL_AUTH_REDIRECT_IS_HTTPS = SCHEMA == "https"

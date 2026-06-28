@@ -1,6 +1,8 @@
 from django.core.exceptions import ValidationError
 from django.db.models import Max
 from django.db.models import Min
+from django.http import HttpResponse
+from django.utils.text import slugify
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 from rest_framework import status
@@ -13,11 +15,17 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from store.filters import ReportFilter
 from store.filters import StoneFilter
+from store.models import Report
 from store.models import Stone
 from store.models import StoneColor
 from store.models import StoneCut
 from store.models import StoneTreatment
+from store.pdf import build_qr_sheet_pdf
+from store.pdf import build_report_pdf
+from store.serializers import ReportAdminSerializer
+from store.serializers import ReportPublicSerializer
 from store.serializers import StoneAdminSerializer
 from store.serializers import StoneColorSerializer
 from store.serializers import StoneCutSerializer
@@ -181,3 +189,81 @@ class StoneViewSet(ModelViewSet):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class StoreReportViewSet(ModelViewSet):
+    permission_classes = [IsStaffOrReadOnly]
+    authentication_classes = [CsrfExemptSessionAuthentication, JWTAuthentication]
+    renderer_classes = [JSONRenderer, BrowsableAPIRenderer]
+    filter_backends = [filters.OrderingFilter, filters.SearchFilter, DjangoFilterBackend]
+    filterset_class = ReportFilter
+    queryset = Report.objects.all()
+    search_fields = ["title", "stone", "first_name", "last_name", "owner_email"]
+    ordering_fields = ["created_at", "title"]
+    ordering = ["-created_at"]
+    lookup_field = "pk"
+
+    def _is_staff(self):
+        user = getattr(self.request, "user", None)
+        return bool(user and user.is_authenticated and user.is_staff)
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if not self._is_staff():
+            queryset = queryset.filter(public=True)
+        serializer_class = self.get_serializer_class()
+        if hasattr(serializer_class, "setup_eager_loading"):
+            queryset = serializer_class.setup_eager_loading(queryset=queryset, request=self.request)
+        return queryset
+
+    def get_serializer_class(self):
+        if self._is_staff():
+            return ReportAdminSerializer
+        return ReportPublicSerializer
+
+    @action(detail=True, methods=["patch"], url_path="toggle-public", permission_classes=[IsStaff])
+    def toggle_public(self, request, pk=None):
+        report = self.get_object()
+        report.public = not report.public
+        report.save(update_fields=["public", "updated_at"])
+        serializer = ReportAdminSerializer(report, context=self.get_serializer_context())
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=["get"], url_path="search", permission_classes=[IsStaff])
+    def search_unlinked(self, request):
+        query = request.query_params.get("q", "").strip()
+        try:
+            limit = min(int(request.query_params.get("limit", 20)), 50)
+        except (TypeError, ValueError):
+            limit = 20
+        queryset = Report.objects.filter(linked_stone__isnull=True)
+        if query:
+            queryset = queryset.filter(title__icontains=query) | queryset.filter(stone__icontains=query)
+        queryset = queryset.order_by("-created_at")[:limit]
+        results = [
+            {
+                "id": str(report.id),
+                "title": report.title,
+                "stone": report.stone,
+                "created_at": report.created_at,
+            }
+            for report in queryset
+        ]
+        return Response({"results": results}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["get"], url_path="pdf")
+    def pdf(self, request, pk=None):
+        report = self.get_object()
+        content = build_report_pdf(report, include_admin_fields=self._is_staff())
+        filename = slugify(report.title or "report") or "report"
+        response = HttpResponse(content, content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="{filename}.pdf"'
+        return response
+
+    @action(detail=False, methods=["get"], url_path="export-qr", permission_classes=[IsStaff])
+    def export_qr(self, request):
+        reports = Report.objects.filter(public=True).order_by("-created_at")
+        content = build_qr_sheet_pdf(reports)
+        response = HttpResponse(content, content_type="application/pdf")
+        response["Content-Disposition"] = 'inline; filename="report-qr-codes.pdf"'
+        return response
