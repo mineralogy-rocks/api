@@ -11,6 +11,7 @@ django-environ==0.9.0
 django-filter==22.1
 django-storages==1.13.2
 django-nested-admin==4.0.2
+social-auth-app-django==5.4.2
 djangorestframework==3.14.0
 djangorestframework-api-key==3.0.0
 djangorestframework-simplejwt==5.3.1

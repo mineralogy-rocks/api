@@ -3,6 +3,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth import login
 from django.contrib.auth import logout
 from django.contrib.auth.password_validation import validate_password
+from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q
 from django.utils import timezone
@@ -19,7 +20,9 @@ from rest_framework.permissions import AllowAny
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import TokenError
 
+from users.authentication import CsrfExemptSessionAuthentication
 from users.models import Space
 from users.models import SpaceCollaborator
 from users.models import User
@@ -45,11 +48,7 @@ from users.services import send_invitation_email
 from users.services import send_password_reset_email
 from users.services import validate_invitation_token
 from users.services import validate_password_reset_token
-
-
-class CsrfExemptSessionAuthentication(SessionAuthentication):
-    def enforce_csrf(self, request):
-        return
+from users.tokens import OneTimeToken
 
 
 class SpacePagination(LimitOffsetPagination):
@@ -555,7 +554,7 @@ class InvitationViewSet(viewsets.GenericViewSet):
         invitation.is_accepted = True
         invitation.save()
 
-        login(request, user)
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
 
         return Response(
             {
@@ -662,6 +661,35 @@ class PasswordResetViewSet(viewsets.GenericViewSet):
         _token.is_used = True
         _token.save()
 
-        login(request, user)
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
 
         return Response({"detail": "Password has been reset successfully"}, status=status.HTTP_200_OK)
+
+
+class SessionExchangeView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        raw = request.data.get("token")
+        if not raw:
+            return Response({"detail": "token is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            ott = OneTimeToken(raw)
+        except TokenError:
+            return Response({"detail": "Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
+
+        jti = ott.get("jti")
+        cache_key = f"ott:{jti}"
+        if cache.get(cache_key):
+            return Response({"detail": "Token already used"}, status=status.HTTP_400_BAD_REQUEST)
+        cache.set(cache_key, 1, timeout=60)
+
+        try:
+            user = User.objects.get(id=ott["user_id"], is_active=True)
+        except User.DoesNotExist:
+            return Response({"detail": "User not found"}, status=status.HTTP_400_BAD_REQUEST)
+
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        serializer = UserSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)

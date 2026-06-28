@@ -2,7 +2,6 @@
 from django.db.models import Prefetch
 from django.utils import timezone
 from rest_framework import serializers
-
 from users.encryption import decrypt_value
 from users.encryption import encrypt_value
 from users.models import Space
@@ -14,8 +13,8 @@ from users.models import UserTag
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "email", "username", "first_name", "last_name", "date_joined"]
-        read_only_fields = ["id", "email", "date_joined"]
+        fields = ["id", "email", "username", "first_name", "last_name", "is_staff", "date_joined"]
+        read_only_fields = ["id", "email", "is_staff", "date_joined"]
 
 
 class UserUpdateSerializer(serializers.ModelSerializer):

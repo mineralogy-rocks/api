@@ -21,10 +21,12 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("_nested_admin/", include("nested_admin.urls")),
     path("", include("core.urls")),
+    path("auth/", include("social_django.urls", namespace="social")),
     path("auth/", include("rest_framework.urls", namespace="rest_framework")),
     path("user/", include("users.urls"), name="users"),
     path("blog/", include("blog.urls"), name="blog"),
     path("erebus/", include("erebus.urls"), name="erebus"),
+    path("store/", include("store.urls"), name="store"),
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
         "schema/swagger-ui/",
