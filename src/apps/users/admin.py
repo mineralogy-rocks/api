@@ -150,7 +150,6 @@ class SpaceCollaboratorAdmin(admin.ModelAdmin):
     @admin.action(description="Resend invitation emails")
     def resend_invitations(self, request, queryset):
         from django.utils import timezone
-
         from users.services import calculate_expiration_date
         from users.services import generate_invitation_token
         from users.services import send_invitation_email

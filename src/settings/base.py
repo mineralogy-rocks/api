@@ -90,7 +90,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "social_django.middleware.SocialAuthExceptionMiddleware",
+    "users.middleware.FrontendRedirectExceptionMiddleware",
 ]
 
 CACHES = {
@@ -282,12 +282,9 @@ SOCIAL_AUTH_GOOGLE_OAUTH2_USER_FIELDS = ["email", "first_name", "last_name"]
 AUTH_EMAIL_ALLOWLIST = [
     e.strip().lower() for e in os.environ.get("DJANGO_AUTH_EMAIL_ALLOWLIST", default="").split(",") if e.strip()
 ]
-AUTH_FRONTEND_CALLBACK_URL = os.environ.get(
-    "DJANGO_AUTH_FRONTEND_CALLBACK_URL", default="http://gemsla.be.local/auth/callback"
-)
-SOCIAL_AUTH_LOGIN_ERROR_URL = os.environ.get(
-    "DJANGO_AUTH_LOGIN_ERROR_URL", default="http://gemsla.be.local/auth/sign-in?error=auth"
-)
+SOCIAL_AUTH_ALLOWED_REDIRECT_HOSTS = [
+    h.strip() for h in os.environ.get("DJANGO_SOCIAL_AUTH_ALLOWED_REDIRECT_HOSTS", default="").split(",") if h.strip()
+]
 
 SOCIAL_AUTH_PIPELINE = (
     "social_core.pipeline.social_auth.social_details",

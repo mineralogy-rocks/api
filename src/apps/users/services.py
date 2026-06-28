@@ -5,7 +5,6 @@ from datetime import timedelta
 from core.utils import send_email
 from django.conf import settings
 from django.utils import timezone
-
 from users.models import PasswordResetToken
 from users.models import SpaceCollaborator
 

@@ -1,8 +1,9 @@
 from urllib.parse import urlencode
+from urllib.parse import urlparse
 
 from django.conf import settings
+from django.http import HttpResponseBadRequest
 from social_core.exceptions import AuthForbidden
-
 from users.tokens import OneTimeToken
 
 
@@ -26,7 +27,24 @@ def grant_staff(backend, user, *args, **kwargs):
         user.save(update_fields=["is_staff", "is_active"])
 
 
+def resolve_frontend_callback_url(strategy):
+    requested = strategy.session_get("next") or ""
+    if requested and urlparse(requested).netloc in settings.SOCIAL_AUTH_ALLOWED_REDIRECT_HOSTS:
+        return requested
+    return None
+
+
+def frontend_error_url(strategy, code="auth"):
+    callback_url = resolve_frontend_callback_url(strategy)
+    if not callback_url:
+        return None
+    return f"{callback_url}?{urlencode({'error': code})}"
+
+
 def issue_token_and_redirect(strategy, user, *args, **kwargs):
+    callback_url = resolve_frontend_callback_url(strategy)
+    if not callback_url:
+        return HttpResponseBadRequest("Missing or untrusted redirect target")
     token = str(OneTimeToken.for_user(user))
-    url = f"{settings.AUTH_FRONTEND_CALLBACK_URL}?{urlencode({'token': token})}"
+    url = f"{callback_url}?{urlencode({'token': token})}"
     return strategy.redirect(url)

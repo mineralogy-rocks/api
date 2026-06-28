@@ -21,5 +21,4 @@ DJANGO_FIELD_ENCRYPTION_KEY=local-dev-field-encryption-key-32b
 DJANGO_GOOGLE_OAUTH2_KEY=
 DJANGO_GOOGLE_OAUTH2_SECRET=
 DJANGO_AUTH_EMAIL_ALLOWLIST=liubomyr.gavryliv@gmail.com
-DJANGO_AUTH_FRONTEND_CALLBACK_URL=http://gemsla.be.local/auth/callback
-DJANGO_AUTH_LOGIN_ERROR_URL=http://gemsla.be.local/auth/sign-in?error=auth
+DJANGO_SOCIAL_AUTH_ALLOWED_REDIRECT_HOSTS=gemsla.be.local,gemsla.be.local:8081,mineralogy.rocks.local,mineralogy.rocks.local:8080
