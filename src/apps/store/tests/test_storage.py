@@ -1,5 +1,4 @@
 from django.test import SimpleTestCase
-
 from store.storage import signed_url
 
 

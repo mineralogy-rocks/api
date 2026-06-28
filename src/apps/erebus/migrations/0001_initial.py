@@ -3,11 +3,10 @@
 import uuid
 
 import django.db.models.deletion
+import erebus.utils
 from django.conf import settings
 from django.db import migrations
 from django.db import models
-
-import erebus.utils
 
 
 class Migration(migrations.Migration):
