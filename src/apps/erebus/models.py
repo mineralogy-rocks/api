@@ -11,7 +11,6 @@ from django.contrib.auth import get_user_model
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from .utils import ErebusStorage
 from .utils import _create_hash
 from .utils import _get_upload_path
 
@@ -211,10 +210,9 @@ class Queue(BaseModel, Creatable, Updatable):
 
     file = models.FileField(
         upload_to=_get_upload_path,
-        storage=ErebusStorage(),
         max_length=1000,
         null=False,
-        help_text=_("File stored in S3"),
+        help_text=_("Stored file"),
     )
     markdown = models.TextField(null=True, blank=True)
 

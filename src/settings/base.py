@@ -267,6 +267,34 @@ AWS_S3_ENDPOINT_URL = os.environ.get("DJANGO_AWS_S3_ENDPOINT_URL", default="http
 
 STORE_SIGNED_URL_EXPIRE = int(os.environ.get("DJANGO_STORE_SIGNED_URL_EXPIRE", default="3600"))
 
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+    "store_private": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "OPTIONS": {
+            "location": "store_private",
+            "default_acl": None,
+            "querystring_auth": True,
+            "querystring_expire": STORE_SIGNED_URL_EXPIRE,
+            "file_overwrite": False,
+        },
+    },
+    "store_public": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "OPTIONS": {
+            "location": "store_public",
+            "default_acl": None,
+            "querystring_auth": False,
+            "file_overwrite": False,
+        },
+    },
+}
+
 GEMS_SITE_URL = os.environ.get("DJANGO_GEMS_SITE_URL", default="https://gemsla.be")
 
 SOCIAL_AUTH_JSONFIELD_ENABLED = True
