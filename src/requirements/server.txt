@@ -1,5 +1,5 @@
 -r base.txt
 
 gevent==24.2.1
-psycopg2==2.9.9
+psycopg2==2.9.12
 sentry-sdk==2.1.1

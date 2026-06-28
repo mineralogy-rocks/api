@@ -1,5 +1,5 @@
 -r base.txt
 
 django-debug-toolbar==4.3.0
-psycopg2==2.9.9
+psycopg2==2.9.12
 pre-commit==3.7.0
