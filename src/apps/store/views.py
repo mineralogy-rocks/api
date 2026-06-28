@@ -5,21 +5,14 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.parsers import FormParser
 from rest_framework.parsers import MultiPartParser
-from rest_framework.permissions import AllowAny
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import BrowsableAPIRenderer
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from users.authentication import CsrfExemptSessionAuthentication
-from users.permissions import IsStaff
-from users.permissions import IsStaffOrReadOnly
-
 from store.filters import StoneFilter
 from store.models import Stone
 from store.models import StoneColor
@@ -33,41 +26,9 @@ from store.serializers import StonePublicListSerializer
 from store.serializers import StoneTreatmentSerializer
 from store.storage import signed_url
 from store.storage import store_file
-
-
-def _is_truthy(value):
-    if value is None:
-        return False
-    return str(value).strip().lower() in ("1", "true", "yes", "on")
-
-
-class PingView(APIView):
-    permission_classes = [AllowAny]
-    authentication_classes = []
-
-    def get(self, request):
-        paginator = LimitOffsetPagination()
-        data = [{"status": "ok", "service": "store"}]
-        page = paginator.paginate_queryset(data, request, view=self)
-        return paginator.get_paginated_response(page)
-
-
-class StoreMeView(APIView):
-    authentication_classes = [CsrfExemptSessionAuthentication]
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        user = request.user
-        return Response(
-            {
-                "id": user.id,
-                "email": user.email,
-                "is_staff": user.is_staff,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-            },
-            status=status.HTTP_200_OK,
-        )
+from users.authentication import CsrfExemptSessionAuthentication
+from users.permissions import IsStaff
+from users.permissions import IsStaffOrReadOnly
 
 
 class FileUploadView(APIView):
@@ -125,6 +86,7 @@ class StoneViewSet(ModelViewSet):
     renderer_classes = [JSONRenderer, BrowsableAPIRenderer]
     filter_backends = [filters.OrderingFilter, filters.SearchFilter, DjangoFilterBackend]
     filterset_class = StoneFilter
+    queryset = Stone.objects.all()
     search_fields = ["name", "description", "mineral", "country", "item_number"]
     ordering_fields = ["created_at", "selling_price", "weight_carats", "name", "sold_price", "country"]
     ordering = ["-created_at"]
@@ -135,12 +97,13 @@ class StoneViewSet(ModelViewSet):
         return bool(user and user.is_authenticated and user.is_staff)
 
     def get_queryset(self):
-        qs = Stone.objects.all()
+        queryset = super().get_queryset()
         if not self._is_staff():
-            qs = qs.filter(is_sold=False)
-            if self.action == "list":
-                qs = qs.filter(is_selling=True)
-        return qs.select_related("color", "cut", "treatment").prefetch_related("images")
+            queryset = queryset.filter(is_selling=True)
+        serializer_class = self.get_serializer_class()
+        if hasattr(serializer_class, "setup_eager_loading"):
+            queryset = serializer_class.setup_eager_loading(queryset=queryset, request=self.request)
+        return queryset
 
     def get_serializer_class(self):
         if self._is_staff():
@@ -151,11 +114,8 @@ class StoneViewSet(ModelViewSet):
 
     def _facet_queryset(self):
         qs = Stone.objects.all()
-        if self._is_staff():
-            if not _is_truthy(self.request.query_params.get("show_sold")):
-                qs = qs.filter(is_sold=False)
-        else:
-            qs = qs.filter(is_selling=True, is_sold=False)
+        if not self._is_staff():
+            qs = qs.filter(is_selling=True)
         return qs
 
     @action(detail=False, methods=["post"], url_path="bulk-delete", permission_classes=[IsStaff])

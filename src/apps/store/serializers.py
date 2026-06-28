@@ -96,7 +96,8 @@ class StonePublicListSerializer(serializers.ModelSerializer):
         ]
 
     @staticmethod
-    def setup_eager_loading(queryset):
+    def setup_eager_loading(**kwargs):
+        queryset = kwargs.get("queryset")
         return queryset.select_related("color", "cut", "treatment").prefetch_related("images")
 
 
@@ -183,7 +184,8 @@ class StoneAdminSerializer(serializers.ModelSerializer):
         ]
 
     @staticmethod
-    def setup_eager_loading(queryset):
+    def setup_eager_loading(**kwargs):
+        queryset = kwargs.get("queryset")
         return queryset.select_related("color", "cut", "treatment").prefetch_related("images")
 
     def _replace_images(self, stone, images):

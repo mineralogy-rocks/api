@@ -21,7 +21,6 @@ class StoneFilter(filters.FilterSet):
     untreated = filters.BooleanFilter(method="filter_untreated")
 
     is_sold = filters.BooleanFilter()
-    is_selling = filters.BooleanFilter()
 
     class Meta:
         model = Stone
@@ -35,7 +34,6 @@ class StoneFilter(filters.FilterSet):
             "treatment",
             "untreated",
             "is_sold",
-            "is_selling",
         ]
 
     def filter_untreated(self, queryset, name, value):

@@ -3,13 +3,12 @@ import datetime
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
-from users.models import User
-
 from store.models import Stone
 from store.models import StoneColor
 from store.models import StoneCut
 from store.models import StoneImage
 from store.models import StoneTreatment
+from users.models import User
 
 
 def _make_user(email, is_staff):
@@ -130,14 +129,20 @@ class PublicReadFilteringTest(StoneApiBaseTest):
         self.sold = self._create_stone(name="Sold", is_sold=True, is_selling=True, selling_price="50.00")
         self.not_selling = self._create_stone(name="Draft", is_selling=False, selling_price="70.00")
 
-    def test_anonymous_list_only_selling_and_unsold(self):
+    def test_anonymous_list_shows_all_selling_including_sold(self):
         response = self.client.get("/store/stones/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(response.data["count"], 3)
+        ids = {row["id"] for row in response.data["results"]}
+        self.assertEqual(ids, {str(self.visible_a.id), str(self.visible_b.id), str(self.sold.id)})
+        self.assertNotIn(str(self.not_selling.id), ids)
+
+    def test_anonymous_can_filter_available_only(self):
+        response = self.client.get("/store/stones/?is_sold=false")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         ids = {row["id"] for row in response.data["results"]}
         self.assertEqual(ids, {str(self.visible_a.id), str(self.visible_b.id)})
         self.assertNotIn(str(self.sold.id), ids)
-        self.assertNotIn(str(self.not_selling.id), ids)
 
     def test_staff_list_sees_everything(self):
         self.client.force_login(self.staff)
@@ -253,6 +258,7 @@ class DetailTest(StoneApiBaseTest):
         StoneImage.objects.create(stone=self.stone, image_url="b.jpg", display_order=2)
         StoneImage.objects.create(stone=self.stone, image_url="a.jpg", display_order=1)
         self.sold = self._create_stone(name="Gone", is_sold=True, selling_price="42.00")
+        self.not_selling = self._create_stone(name="Draft", is_selling=False, selling_price="42.00")
 
     def test_anonymous_detail_images_ordered_and_has_report(self):
         response = self.client.get(f"/store/stones/{self.stone.id}/")
@@ -264,12 +270,16 @@ class DetailTest(StoneApiBaseTest):
         self.assertEqual(images[0]["image_url"], "https://s3.local/mr-dev/gems/a.jpg")
         self.assertIn("gems/", images[1]["image_url"])
 
-    def test_sold_detail_hidden_from_anon_visible_to_staff(self):
-        anon = self.client.get(f"/store/stones/{self.sold.id}/")
+    def test_sold_selling_detail_visible_to_anon(self):
+        response = self.client.get(f"/store/stones/{self.sold.id}/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_not_selling_detail_hidden_from_anon_visible_to_staff(self):
+        anon = self.client.get(f"/store/stones/{self.not_selling.id}/")
         self.assertEqual(anon.status_code, status.HTTP_404_NOT_FOUND)
 
         self.client.force_login(self.staff)
-        staff = self.client.get(f"/store/stones/{self.sold.id}/")
+        staff = self.client.get(f"/store/stones/{self.not_selling.id}/")
         self.assertEqual(staff.status_code, status.HTTP_200_OK)
 
 
@@ -351,12 +361,13 @@ class FacetsTest(StoneApiBaseTest):
             color=self.color_blue,
             cut=self.cut_round,
         )
-        self._create_stone(name="Hidden Sold", is_sold=True, selling_price="999.00", color=self.color_red)
+        self._create_stone(name="Sold Selling", is_sold=True, selling_price="999.00", color=self.color_red)
+        self._create_stone(name="Not Selling", is_selling=False, selling_price="5.00", color=self.color_blue)
 
     def test_facets_for_anonymous(self):
         response = self.client.get("/store/stones/facets/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["priceRange"], {"min": 10.0, "max": 50.0})
+        self.assertEqual(response.data["priceRange"], {"min": 10.0, "max": 999.0})
         self.assertEqual(response.data["weightRange"], {"min": 1.5, "max": 4.0})
         self.assertEqual({c["id"] for c in response.data["colors"]}, {self.color_red.id, self.color_blue.id})
         self.assertEqual([c["name"] for c in response.data["cuts"]], ["Oval", "Round"])

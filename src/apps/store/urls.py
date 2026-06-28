@@ -1,15 +1,12 @@
 from django.urls import include
 from django.urls import path
 from rest_framework.routers import DefaultRouter
-
 from store.views import FileUploadView
-from store.views import PingView
 from store.views import SignedUrlView
 from store.views import StoneColorViewSet
 from store.views import StoneCutViewSet
 from store.views import StoneTreatmentViewSet
 from store.views import StoneViewSet
-from store.views import StoreMeView
 
 app_name = "store"
 
@@ -20,8 +17,6 @@ router.register("stone-cuts", StoneCutViewSet, basename="stone-cut")
 router.register("stone-treatments", StoneTreatmentViewSet, basename="stone-treatment")
 
 urlpatterns = [
-    path("ping/", PingView.as_view(), name="ping"),
-    path("me/", StoreMeView.as_view(), name="me"),
     path("files/", FileUploadView.as_view(), name="file-upload"),
     path("files/<path:key>/signed-url/", SignedUrlView.as_view(), name="file-signed-url"),
     path("", include(router.urls)),
