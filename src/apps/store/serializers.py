@@ -218,26 +218,6 @@ class StoneAdminSerializer(serializers.ModelSerializer):
         return stone
 
 
-REPORT_ADMIN_ONLY_FIELDS = ("note", "owner_telephone", "currency", "price")
-
-REPORT_GEMOLOGICAL_FIELDS = (
-    "shape_cutting_style",
-    "measurements",
-    "carat_weight",
-    "specific_gravity",
-    "refractive_index",
-    "double_refraction",
-    "polariscope",
-    "pleochroism",
-    "chelsea_color_filter",
-    "fluorescence_sw",
-    "fluorescence_lw",
-    "microscope",
-    "treatment",
-    "origin",
-)
-
-
 class LinkedStoneSummarySerializer(serializers.ModelSerializer):
     class Meta:
         model = Stone
@@ -269,10 +249,8 @@ class ReportImageSerializer(serializers.ModelSerializer):
         return signed_url(instance.image_url)
 
 
-class ReportPublicSerializer(serializers.ModelSerializer):
-    report_images = ReportImageSerializer(many=True, read_only=True, source="images")
+class ReportBaseSerializer(serializers.ModelSerializer):
     linked_stone = LinkedStoneSummarySerializer(read_only=True)
-    stone_id = serializers.PrimaryKeyRelatedField(read_only=True, source="linked_stone")
 
     class Meta:
         model = Report
@@ -287,11 +265,29 @@ class ReportPublicSerializer(serializers.ModelSerializer):
             "last_name",
             "owner_email",
             "public",
+            "report_images",
+            "shape_cutting_style",
+            "measurements",
+            "carat_weight",
+            "specific_gravity",
+            "refractive_index",
+            "double_refraction",
+            "polariscope",
+            "pleochroism",
+            "chelsea_color_filter",
+            "fluorescence_sw",
+            "fluorescence_lw",
+            "microscope",
+            "treatment",
+            "origin",
             "created_at",
             "updated_at",
-            "report_images",
-            *REPORT_GEMOLOGICAL_FIELDS,
         ]
+
+
+class ReportPublicSerializer(ReportBaseSerializer):
+    report_images = ReportImageSerializer(many=True, read_only=True, source="images")
+    stone_id = serializers.PrimaryKeyRelatedField(read_only=True, source="linked_stone")
 
     @staticmethod
     def setup_eager_loading(**kwargs):
@@ -299,9 +295,8 @@ class ReportPublicSerializer(serializers.ModelSerializer):
         return queryset.select_related("linked_stone").prefetch_related("images")
 
 
-class ReportAdminSerializer(serializers.ModelSerializer):
+class ReportAdminSerializer(ReportBaseSerializer):
     report_images = ReportImageSerializer(many=True, required=False, source="images")
-    linked_stone = LinkedStoneSummarySerializer(read_only=True)
     stone_id = serializers.PrimaryKeyRelatedField(
         queryset=Stone.objects.all(),
         source="linked_stone",
@@ -309,28 +304,13 @@ class ReportAdminSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
 
-    class Meta:
-        model = Report
-        fields = [
-            "id",
-            "title",
-            "stone",
-            "stone_id",
-            "linked_stone",
-            "description",
+    class Meta(ReportBaseSerializer.Meta):
+        fields = ReportBaseSerializer.Meta.fields + [
             "note",
             "owner",
-            "owner_email",
-            "first_name",
-            "last_name",
             "owner_telephone",
-            "public",
             "currency",
             "price",
-            "report_images",
-            "created_at",
-            "updated_at",
-            *REPORT_GEMOLOGICAL_FIELDS,
         ]
         read_only_fields = ["id", "owner", "created_at", "updated_at"]
 

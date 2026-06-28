@@ -63,6 +63,12 @@ class SignedUrlView(APIView):
         return Response({"url": signed_url(key)}, status=status.HTTP_200_OK)
 
 
+class StaffScopedMixin:
+    def _is_staff(self):
+        user = getattr(self.request, "user", None)
+        return bool(user and user.is_authenticated and user.is_staff)
+
+
 class StoreLookupViewSet(ModelViewSet):
     permission_classes = [IsStaffOrReadOnly]
     authentication_classes = [CsrfExemptSessionAuthentication, JWTAuthentication]
@@ -88,7 +94,7 @@ class StoneTreatmentViewSet(StoreLookupViewSet):
     serializer_class = StoneTreatmentSerializer
 
 
-class StoneViewSet(ModelViewSet):
+class StoneViewSet(StaffScopedMixin, ModelViewSet):
     permission_classes = [IsStaffOrReadOnly]
     authentication_classes = [CsrfExemptSessionAuthentication, JWTAuthentication]
     renderer_classes = [JSONRenderer, BrowsableAPIRenderer]
@@ -99,10 +105,6 @@ class StoneViewSet(ModelViewSet):
     ordering_fields = ["created_at", "selling_price", "weight_carats", "name", "sold_price", "country"]
     ordering = ["-created_at"]
     lookup_field = "pk"
-
-    def _is_staff(self):
-        user = getattr(self.request, "user", None)
-        return bool(user and user.is_authenticated and user.is_staff)
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -191,7 +193,7 @@ class StoneViewSet(ModelViewSet):
         )
 
 
-class StoreReportViewSet(ModelViewSet):
+class StoreReportViewSet(StaffScopedMixin, ModelViewSet):
     permission_classes = [IsStaffOrReadOnly]
     authentication_classes = [CsrfExemptSessionAuthentication, JWTAuthentication]
     renderer_classes = [JSONRenderer, BrowsableAPIRenderer]
@@ -202,10 +204,6 @@ class StoreReportViewSet(ModelViewSet):
     ordering_fields = ["created_at", "title"]
     ordering = ["-created_at"]
     lookup_field = "pk"
-
-    def _is_staff(self):
-        user = getattr(self.request, "user", None)
-        return bool(user and user.is_authenticated and user.is_staff)
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -255,7 +253,7 @@ class StoreReportViewSet(ModelViewSet):
     def pdf(self, request, pk=None):
         report = self.get_object()
         content = build_report_pdf(report, include_admin_fields=self._is_staff())
-        filename = slugify(report.title or "report") or "report"
+        filename = slugify(report.title) or "report"
         response = HttpResponse(content, content_type="application/pdf")
         response["Content-Disposition"] = f'inline; filename="{filename}.pdf"'
         return response

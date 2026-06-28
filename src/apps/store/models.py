@@ -6,6 +6,7 @@ from core.models.base import Creatable
 from core.models.base import Updatable
 from core.utils import unique_slugify
 from django.apps import apps
+from django.contrib.auth import get_user_model
 from django.core.validators import RegexValidator
 from django.db import models
 
@@ -235,8 +236,11 @@ class Report(Creatable, Updatable):
         if not self.owner_email:
             self.owner = None
             return
-        User = apps.get_model("users", "User")
-        self.owner = User.objects.filter(email__iexact=self.owner_email).first()
+        User = get_user_model()
+        try:
+            self.owner = User.objects.get(email__iexact=self.owner_email)
+        except User.DoesNotExist:
+            self.owner = None
 
     def save(self, *args, **kwargs):
         self.resolve_owner()
