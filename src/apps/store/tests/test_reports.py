@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 from store.models import Report
@@ -155,7 +156,7 @@ class AdminFieldStrippingTest(ReportApiBaseTest):
 
 
 class SignedUrlTest(ReportApiBaseTest):
-    def test_public_report_images_expose_signed_url(self):
+    def test_public_report_images_expose_private_url(self):
         report = self._create_report(public=True)
         ReportImage.objects.create(report=report, image_url="store/reports/secret.jpg", display_order=0)
         response = self.client.get(f"/store/reports/{report.id}/")
@@ -164,11 +165,8 @@ class SignedUrlTest(ReportApiBaseTest):
         self.assertIn("signed_url", images[0])
         signed = images[0]["signed_url"]
         self.assertTrue(signed)
-        self.assertIn("?", signed)
-        self.assertTrue(
-            any(marker in signed for marker in ("X-Amz-", "Signature", "Expires")),
-            msg=f"expected an expiring signed URL, got {signed}",
-        )
+        expected = f"{settings.STORE_LOCAL_MEDIA_URL.rstrip('/')}/store_private/store/reports/secret.jpg"
+        self.assertEqual(signed, expected)
 
 
 class SearchTest(ReportApiBaseTest):
