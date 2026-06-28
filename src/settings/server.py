@@ -27,6 +27,41 @@ EMAIL_HOST_PASSWORD = os.environ.get("SENDGRID_API_KEY")
 EMAIL_PORT = os.environ.get("DJANGO_EMAIL_PORT")
 EMAIL_USE_TLS = True
 
-STATICFILES_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
-
 STATIC_URL = "{}/{}/".format(AWS_S3_ENDPOINT_URL, AWS_LOCATION)
+
+STORAGES["default"] = {
+    "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+    "OPTIONS": {
+        "location": "",
+        "default_acl": None,
+        "querystring_auth": True,
+        "file_overwrite": False,
+    },
+}
+STORAGES["staticfiles"] = {
+    "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+    "OPTIONS": {
+        "location": AWS_LOCATION,
+        "default_acl": AWS_DEFAULT_ACL,
+        "querystring_auth": AWS_QUERYSTRING_AUTH,
+    },
+}
+STORAGES["store_private"] = {
+    "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+    "OPTIONS": {
+        "location": "store_private",
+        "default_acl": None,
+        "querystring_auth": True,
+        "querystring_expire": STORE_SIGNED_URL_EXPIRE,
+        "file_overwrite": False,
+    },
+}
+STORAGES["store_public"] = {
+    "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+    "OPTIONS": {
+        "location": "store_public",
+        "default_acl": None,
+        "querystring_auth": False,
+        "file_overwrite": False,
+    },
+}

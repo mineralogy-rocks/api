@@ -1,6 +1,7 @@
 # -*- coding: UTF-8 -*-
 from django_filters import rest_framework as filters
 
+from .models import Report
 from .models import Stone
 
 
@@ -39,4 +40,19 @@ class StoneFilter(filters.FilterSet):
     def filter_untreated(self, queryset, name, value):
         if value:
             return queryset.filter(treatment__slug="untreated")
+        return queryset
+
+
+class ReportFilter(filters.FilterSet):
+    public = filters.BooleanFilter()
+    unlinked = filters.BooleanFilter(method="filter_unlinked")
+    linked_stone = filters.UUIDFilter(field_name="linked_stone_id")
+
+    class Meta:
+        model = Report
+        fields = ["public", "unlinked", "linked_stone"]
+
+    def filter_unlinked(self, queryset, name, value):
+        if value:
+            return queryset.filter(linked_stone__isnull=True)
         return queryset

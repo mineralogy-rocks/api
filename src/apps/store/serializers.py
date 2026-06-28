@@ -1,12 +1,15 @@
 # -*- coding: UTF-8 -*-
 from rest_framework import serializers
 
+from .models import Report
+from .models import ReportImage
 from .models import Stone
 from .models import StoneColor
 from .models import StoneCut
 from .models import StoneImage
 from .models import StoneTreatment
 from .storage import public_url
+from .storage import signed_url
 
 
 class StoneColorSerializer(serializers.ModelSerializer):
@@ -213,3 +216,161 @@ class StoneAdminSerializer(serializers.ModelSerializer):
         if images is not None:
             self._replace_images(stone, images)
         return stone
+
+
+class StoneSearchResultSerializer(serializers.ModelSerializer):
+    color = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Stone
+        fields = ["id", "name", "mineral", "color", "weight_carats", "is_sold"]
+
+    def get_color(self, instance):
+        return instance.color.name if instance.color_id else None
+
+
+class LinkedStoneSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Stone
+        fields = ["id", "name", "weight_carats", "mineral", "country"]
+
+
+class ReportImageSerializer(serializers.ModelSerializer):
+    signed_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ReportImage
+        fields = [
+            "id",
+            "image_url",
+            "signed_url",
+            "title",
+            "caption",
+            "is_headline",
+            "display_order",
+            "created_at",
+        ]
+        read_only_fields = ["id", "signed_url", "created_at"]
+        extra_kwargs = {
+            "display_order": {"required": False},
+            "is_headline": {"required": False},
+        }
+
+    def get_signed_url(self, instance):
+        return signed_url(instance.image_url)
+
+
+class ReportBaseSerializer(serializers.ModelSerializer):
+    linked_stone = LinkedStoneSummarySerializer(read_only=True)
+
+    class Meta:
+        model = Report
+        fields = [
+            "id",
+            "title",
+            "stone",
+            "stone_id",
+            "linked_stone",
+            "description",
+            "first_name",
+            "last_name",
+            "owner_email",
+            "public",
+            "report_images",
+            "shape_cutting_style",
+            "measurements",
+            "carat_weight",
+            "specific_gravity",
+            "refractive_index",
+            "double_refraction",
+            "polariscope",
+            "pleochroism",
+            "chelsea_color_filter",
+            "fluorescence_sw",
+            "fluorescence_lw",
+            "microscope",
+            "treatment",
+            "origin",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class ReportPublicSerializer(ReportBaseSerializer):
+    report_images = ReportImageSerializer(many=True, read_only=True, source="images")
+    stone_id = serializers.PrimaryKeyRelatedField(read_only=True, source="linked_stone")
+
+    @staticmethod
+    def setup_eager_loading(**kwargs):
+        queryset = kwargs.get("queryset")
+        return queryset.select_related("linked_stone").prefetch_related("images")
+
+
+class ReportAdminSerializer(ReportBaseSerializer):
+    report_images = ReportImageSerializer(many=True, required=False, source="images")
+    stone_id = serializers.PrimaryKeyRelatedField(
+        queryset=Stone.objects.all(),
+        source="linked_stone",
+        required=False,
+        allow_null=True,
+    )
+
+    class Meta(ReportBaseSerializer.Meta):
+        fields = ReportBaseSerializer.Meta.fields + [
+            "note",
+            "owner",
+            "owner_telephone",
+            "currency",
+            "price",
+        ]
+        read_only_fields = ["id", "owner", "created_at", "updated_at"]
+
+    @staticmethod
+    def setup_eager_loading(**kwargs):
+        queryset = kwargs.get("queryset")
+        return queryset.select_related("linked_stone", "owner").prefetch_related("images")
+
+    def validate_stone_id(self, value):
+        if value is None:
+            return value
+        existing = Report.objects.filter(linked_stone=value)
+        if self.instance is not None:
+            existing = existing.exclude(pk=self.instance.pk)
+        if existing.exists():
+            raise serializers.ValidationError("STONE_ALREADY_LINKED")
+        return value
+
+    def _replace_images(self, report, images):
+        report.images.all().delete()
+        objects = [
+            ReportImage(
+                report=report,
+                image_url=image["image_url"],
+                title=image.get("title"),
+                caption=image.get("caption"),
+                is_headline=image.get("is_headline", False),
+                display_order=image.get("display_order", index),
+            )
+            for index, image in enumerate(images)
+        ]
+        ReportImage.objects.bulk_create(objects)
+
+    def create(self, validated_data):
+        images = validated_data.pop("images", None)
+        report = super().create(validated_data)
+        if images is not None:
+            self._replace_images(report, images)
+        return report
+
+    def update(self, instance, validated_data):
+        images = validated_data.pop("images", None)
+        report = super().update(instance, validated_data)
+        if images is not None:
+            self._replace_images(report, images)
+        return report
+
+
+class ReportSearchResultSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Report
+        fields = ["id", "title", "stone", "created_at"]
