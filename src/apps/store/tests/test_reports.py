@@ -194,6 +194,28 @@ class SearchTest(ReportApiBaseTest):
         self.assertEqual(len(response.data["results"]), 1)
 
 
+class StoneSearchTest(ReportApiBaseTest):
+    def test_search_unlinked_stones_endpoint(self):
+        self.client.force_login(self.staff)
+        unlinked = Stone.objects.create(name="Loose Sapphire", mineral="Corundum")
+        linked = Stone.objects.create(name="Linked Sapphire", mineral="Corundum")
+        self._create_report(title="Certified", linked_stone=linked)
+
+        response = self.client.get("/store/stones/search/?q=Sapphire")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = [row["id"] for row in response.data["results"]]
+        self.assertIn(str(unlinked.id), ids)
+        self.assertNotIn(str(linked.id), ids)
+        self.assertEqual(
+            set(response.data["results"][0].keys()), {"id", "name", "mineral", "color", "weight_carats", "is_sold"}
+        )
+
+    def test_search_unlinked_stones_requires_staff(self):
+        self.client.force_login(self.regular)
+        response = self.client.get("/store/stones/search/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
 class StoneLinkingTest(ReportApiBaseTest):
     def test_link_report_to_stone(self):
         self.client.force_login(self.staff)

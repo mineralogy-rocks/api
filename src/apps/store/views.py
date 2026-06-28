@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db.models import Max
 from django.db.models import Min
+from django.db.models import Q
 from django.http import HttpResponse
 from django.utils.text import slugify
 from django_filters.rest_framework import DjangoFilterBackend
@@ -26,11 +27,13 @@ from store.pdf import build_qr_sheet_pdf
 from store.pdf import build_report_pdf
 from store.serializers import ReportAdminSerializer
 from store.serializers import ReportPublicSerializer
+from store.serializers import ReportSearchResultSerializer
 from store.serializers import StoneAdminSerializer
 from store.serializers import StoneColorSerializer
 from store.serializers import StoneCutSerializer
 from store.serializers import StonePublicDetailSerializer
 from store.serializers import StonePublicListSerializer
+from store.serializers import StoneSearchResultSerializer
 from store.serializers import StoneTreatmentSerializer
 from store.storage import signed_url
 from store.storage import store_file
@@ -192,6 +195,22 @@ class StoneViewSet(StaffScopedMixin, ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @action(detail=False, methods=["get"], url_path="search", permission_classes=[IsStaff])
+    def search_unlinked(self, request):
+        query = request.query_params.get("q", "").strip()
+        try:
+            limit = min(int(request.query_params.get("limit", 20)), 50)
+        except (TypeError, ValueError):
+            limit = 20
+        queryset = Stone.objects.filter(report__isnull=True)
+        if query:
+            queryset = queryset.filter(
+                Q(name__icontains=query) | Q(mineral__icontains=query) | Q(item_number__icontains=query)
+            )
+        queryset = queryset.select_related("color").order_by("-created_at")[:limit]
+        serializer = StoneSearchResultSerializer(queryset, many=True)
+        return Response({"results": serializer.data}, status=status.HTTP_200_OK)
+
 
 class StoreReportViewSet(StaffScopedMixin, ModelViewSet):
     permission_classes = [IsStaffOrReadOnly]
@@ -236,18 +255,10 @@ class StoreReportViewSet(StaffScopedMixin, ModelViewSet):
             limit = 20
         queryset = Report.objects.filter(linked_stone__isnull=True)
         if query:
-            queryset = queryset.filter(title__icontains=query) | queryset.filter(stone__icontains=query)
+            queryset = queryset.filter(Q(title__icontains=query) | Q(stone__icontains=query))
         queryset = queryset.order_by("-created_at")[:limit]
-        results = [
-            {
-                "id": str(report.id),
-                "title": report.title,
-                "stone": report.stone,
-                "created_at": report.created_at,
-            }
-            for report in queryset
-        ]
-        return Response({"results": results}, status=status.HTTP_200_OK)
+        serializer = ReportSearchResultSerializer(queryset, many=True)
+        return Response({"results": serializer.data}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["get"], url_path="pdf")
     def pdf(self, request, pk=None):

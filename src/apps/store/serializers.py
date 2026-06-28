@@ -218,6 +218,17 @@ class StoneAdminSerializer(serializers.ModelSerializer):
         return stone
 
 
+class StoneSearchResultSerializer(serializers.ModelSerializer):
+    color = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Stone
+        fields = ["id", "name", "mineral", "color", "weight_carats", "is_sold"]
+
+    def get_color(self, instance):
+        return instance.color.name if instance.color_id else None
+
+
 class LinkedStoneSummarySerializer(serializers.ModelSerializer):
     class Meta:
         model = Stone
@@ -357,3 +368,9 @@ class ReportAdminSerializer(ReportBaseSerializer):
         if images is not None:
             self._replace_images(report, images)
         return report
+
+
+class ReportSearchResultSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Report
+        fields = ["id", "title", "stone", "created_at"]
