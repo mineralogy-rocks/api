@@ -65,3 +65,12 @@ STORAGES["store_public"] = {
         "file_overwrite": False,
     },
 }
+STORAGES["blog_public"] = {
+    "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+    "OPTIONS": {
+        "location": "blog_public",
+        "default_acl": None,
+        "querystring_auth": False,
+        "file_overwrite": False,
+    },
+}

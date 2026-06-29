@@ -55,3 +55,10 @@ STORAGES["store_public"] = {
         "base_url": f"{STORE_LOCAL_MEDIA_URL.rstrip('/')}/store_public/",
     },
 }
+STORAGES["blog_public"] = {
+    "BACKEND": "django.core.files.storage.FileSystemStorage",
+    "OPTIONS": {
+        "location": os.path.join(MEDIA_ROOT, "blog_public"),
+        "base_url": f"{STORE_LOCAL_MEDIA_URL.rstrip('/')}/blog_public/",
+    },
+}

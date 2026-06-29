@@ -293,7 +293,18 @@ STORAGES = {
             "file_overwrite": False,
         },
     },
+    "blog_public": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "OPTIONS": {
+            "location": "blog_public",
+            "default_acl": None,
+            "querystring_auth": False,
+            "file_overwrite": False,
+        },
+    },
 }
+
+DEFAULT_BLOG_CHANNEL = os.environ.get("DJANGO_DEFAULT_BLOG_CHANNEL", default="mineralogy.rocks")
 
 GEMS_SITE_URL = os.environ.get("DJANGO_GEMS_SITE_URL", default="https://gemsla.be")
 
