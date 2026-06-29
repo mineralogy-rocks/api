@@ -1,10 +1,26 @@
+import base64
+from io import BytesIO
+
 from django.conf import settings
+from django.core.files.base import ContentFile
+from django.core.files.storage import storages
 from rest_framework import status
 from rest_framework.test import APITestCase
 from store.models import Report
 from store.models import ReportImage
 from store.models import Stone
+from store.storage import STORE_PRIVATE_STORAGE_ALIAS
 from users.models import User
+
+try:
+    from pypdf import PdfReader
+except ImportError:
+    from PyPDF2 import PdfReader
+
+
+PNG_1X1 = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+)
 
 
 def _make_user(email, is_staff):
@@ -247,6 +263,24 @@ class ExportTest(ReportApiBaseTest):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response["Content-Type"], "application/pdf")
         self.assertTrue(response.content.startswith(b"%PDF"))
+
+    def test_pdf_export_embeds_private_report_images(self):
+        storage = storages[STORE_PRIVATE_STORAGE_ALIAS]
+        report = self._create_report(title="Exportable with image", stone="Sapphire", public=True)
+        image_name = f"store/reports/test-report-image-{report.id}.png"
+        storage.save(image_name, ContentFile(PNG_1X1))
+        try:
+            ReportImage.objects.create(report=report, image_url=image_name, is_headline=True)
+            response = self.client.get(f"/store/reports/{report.id}/pdf/")
+            reader = PdfReader(BytesIO(response.content))
+            image_count = 0
+            for page in reader.pages:
+                xobjects = (page.get("/Resources") or {}).get("/XObject") or {}
+                image_count += sum(1 for ref in xobjects.values() if ref.get_object().get("/Subtype") == "/Image")
+            self.assertGreaterEqual(image_count, 1)
+        finally:
+            if storage.exists(image_name):
+                storage.delete(image_name)
 
     def test_pdf_export_private_report_blocked_for_anonymous(self):
         report = self._create_report(title="Private export", public=False)
