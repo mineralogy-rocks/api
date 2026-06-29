@@ -10,7 +10,8 @@ class PostFilter(filters.FilterSet):
         lookup_expr="exact",
     )
     author = filters.NumberFilter(field_name="authors__id", lookup_expr="exact")
+    tag = filters.CharFilter(field_name="tags__name", lookup_expr="iexact")
 
     class Meta:
         model = Post
-        fields = ["name", "views", "likes", "tags", "category", "author"]
+        fields = ["name", "views", "likes", "tags", "category", "author", "tag"]
