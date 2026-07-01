@@ -1,12 +1,13 @@
 # -*- coding: UTF-8 -*-
+from core.storage import signed_url
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
+from .constants import BLOG_PREFIX
 from .models import Category
 from .models import Channel
 from .models import Post
 from .models import Tag
-from .storage import public_url
 
 
 class TagListSerializer(serializers.ModelSerializer):
@@ -34,7 +35,7 @@ class ChannelSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
-            "slug",
+            "host",
         ]
 
 
@@ -86,7 +87,7 @@ class PostListSerializer(serializers.ModelSerializer):
         ]
 
     def get_cover_image(self, instance):
-        return public_url(instance.cover_image)
+        return signed_url(instance.cover_image, prefix=BLOG_PREFIX)
 
     @staticmethod
     def setup_eager_loading(**kwargs):
@@ -136,14 +137,14 @@ class PostDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_cover_image(self, instance):
-        return public_url(instance.cover_image)
+        return signed_url(instance.cover_image, prefix=BLOG_PREFIX)
 
 
 class PostAdminSerializer(serializers.ModelSerializer):
     tags = TagListSerializer(many=True, read_only=True)
     tag_names = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
     channels = ChannelSerializer(many=True, read_only=True)
-    channel_slugs = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
+    channel_hosts = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
     authors = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=get_user_model().objects.all(),
@@ -167,7 +168,7 @@ class PostAdminSerializer(serializers.ModelSerializer):
             "tags",
             "tag_names",
             "channels",
-            "channel_slugs",
+            "channel_hosts",
             "authors",
             "views",
             "likes",
@@ -188,10 +189,10 @@ class PostAdminSerializer(serializers.ModelSerializer):
         queryset = kwargs.get("queryset")
         return queryset.select_related("category").prefetch_related("tags", "authors", "channels")
 
-    def validate_channel_slugs(self, value):
-        channels = list(Channel.objects.filter(slug__in=value))
-        found = {channel.slug for channel in channels}
-        missing = [slug for slug in value if slug not in found]
+    def validate_channel_hosts(self, value):
+        channels = list(Channel.objects.filter(host__in=value))
+        found = {channel.host for channel in channels}
+        missing = [host for host in value if host not in found]
         if missing:
             raise serializers.ValidationError(f"Unknown channel(s): {', '.join(missing)}")
         return channels
@@ -204,7 +205,7 @@ class PostAdminSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         tag_names = validated_data.pop("tag_names", None)
-        channels = validated_data.pop("channel_slugs", None)
+        channels = validated_data.pop("channel_hosts", None)
         post = super().create(validated_data)
         self._apply_tags(post, tag_names)
         if channels is not None:
@@ -213,7 +214,7 @@ class PostAdminSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         tag_names = validated_data.pop("tag_names", None)
-        channels = validated_data.pop("channel_slugs", None)
+        channels = validated_data.pop("channel_hosts", None)
         post = super().update(instance, validated_data)
         self._apply_tags(post, tag_names)
         if channels is not None:

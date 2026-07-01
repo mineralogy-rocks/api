@@ -32,7 +32,7 @@ MEDIA_ROOT = os.environ.get("DJANGO_MEDIA_ROOT", default="/app/media")
 
 STATIC_URL = "/static/"
 MEDIA_URL = "/media/"
-STORE_LOCAL_MEDIA_URL = os.environ.get("DJANGO_STORE_LOCAL_MEDIA_URL") or "http://api.mineralogy.rocks.local/media/"
+LOCAL_MEDIA_URL = os.environ.get("DJANGO_LOCAL_MEDIA_URL") or "http://api.mineralogy.rocks.local/media/"
 
 STORAGES["default"] = {
     "BACKEND": "django.core.files.storage.FileSystemStorage",
@@ -41,24 +41,10 @@ STORAGES["default"] = {
         "base_url": MEDIA_URL,
     },
 }
-STORAGES["store_private"] = {
+STORAGES["media"] = {
     "BACKEND": "django.core.files.storage.FileSystemStorage",
     "OPTIONS": {
-        "location": os.path.join(MEDIA_ROOT, "store_private"),
-        "base_url": f"{STORE_LOCAL_MEDIA_URL.rstrip('/')}/store_private/",
-    },
-}
-STORAGES["store_public"] = {
-    "BACKEND": "django.core.files.storage.FileSystemStorage",
-    "OPTIONS": {
-        "location": os.path.join(MEDIA_ROOT, "store_public"),
-        "base_url": f"{STORE_LOCAL_MEDIA_URL.rstrip('/')}/store_public/",
-    },
-}
-STORAGES["blog_public"] = {
-    "BACKEND": "django.core.files.storage.FileSystemStorage",
-    "OPTIONS": {
-        "location": os.path.join(MEDIA_ROOT, "blog_public"),
-        "base_url": f"{STORE_LOCAL_MEDIA_URL.rstrip('/')}/blog_public/",
+        "location": MEDIA_ROOT,
+        "base_url": LOCAL_MEDIA_URL,
     },
 }

@@ -1,3 +1,5 @@
+from core.storage import signed_url
+from core.storage import store_file
 from django.core.exceptions import ValidationError
 from django.db.models import Max
 from django.db.models import Min
@@ -16,6 +18,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from store.constants import STORE_REPORTS_PREFIX
+from store.constants import STORE_STONES_PREFIX
 from store.filters import ReportFilter
 from store.filters import StoneFilter
 from store.models import Report
@@ -35,27 +39,34 @@ from store.serializers import StonePublicDetailSerializer
 from store.serializers import StonePublicListSerializer
 from store.serializers import StoneSearchResultSerializer
 from store.serializers import StoneTreatmentSerializer
-from store.storage import signed_url
-from store.storage import store_file
 from users.authentication import CsrfExemptSessionAuthentication
 from users.permissions import IsStaff
 from users.permissions import IsStaffOrReadOnly
 
 
-class FileUploadView(APIView):
+class BaseFileUploadView(APIView):
     authentication_classes = [CsrfExemptSessionAuthentication]
     permission_classes = [IsStaff]
     parser_classes = [MultiPartParser, FormParser]
+    storage_prefix = STORE_REPORTS_PREFIX
 
     def post(self, request):
         file = request.FILES.get("file")
         if not file:
             return Response({"detail": "file is required"}, status=status.HTTP_400_BAD_REQUEST)
-        stored_name = store_file(file, file.name)
+        stored_name = store_file(file, file.name, prefix=self.storage_prefix)
         return Response(
-            {"name": stored_name, "url": signed_url(stored_name)},
+            {"name": stored_name, "url": signed_url(stored_name, prefix=self.storage_prefix)},
             status=status.HTTP_201_CREATED,
         )
+
+
+class FileUploadView(BaseFileUploadView):
+    storage_prefix = STORE_REPORTS_PREFIX
+
+
+class StoneFileUploadView(BaseFileUploadView):
+    storage_prefix = STORE_STONES_PREFIX
 
 
 class SignedUrlView(APIView):
@@ -63,7 +74,7 @@ class SignedUrlView(APIView):
     permission_classes = [IsStaff]
 
     def get(self, request, key):
-        return Response({"url": signed_url(key)}, status=status.HTTP_200_OK)
+        return Response({"url": signed_url(key, prefix=STORE_REPORTS_PREFIX)}, status=status.HTTP_200_OK)
 
 
 class StaffScopedMixin:

@@ -24,9 +24,9 @@ class BlogApiBaseTest(APITestCase):
         cls.regular = _make_user("regular-blog@example.com", is_staff=False)
 
         cls.channel_mr, _ = Channel.objects.get_or_create(
-            slug="mineralogy.rocks", defaults={"name": "mineralogy.rocks"}
+            host="mineralogy.rocks", defaults={"name": "mineralogy.rocks"}
         )
-        cls.channel_gem, _ = Channel.objects.get_or_create(slug="gemsla.be", defaults={"name": "gemsla.be"})
+        cls.channel_gem, _ = Channel.objects.get_or_create(host="gemsla.be", defaults={"name": "gemsla.be"})
 
     def _create_post(self, name, slug, channels=(), is_published=True, **kwargs):
         params = {
@@ -79,7 +79,7 @@ class AdminCrudGatingTest(BlogApiBaseTest):
             "description": "A gem story",
             "content": "",
             "content_json": CONTENT_JSON,
-            "channel_slugs": ["gemsla.be"],
+            "channel_hosts": ["gemsla.be"],
             "tag_names": ["Sapphire"],
             "is_published": True,
             "published_at": "2026-06-29T00:00:00Z",
@@ -87,24 +87,36 @@ class AdminCrudGatingTest(BlogApiBaseTest):
         create = self.client.post("/blog/post/", payload, format="json")
         self.assertEqual(create.status_code, status.HTTP_201_CREATED)
         self.assertEqual(create.data["content_json"], CONTENT_JSON)
-        self.assertEqual({c["slug"] for c in create.data["channels"]}, {"gemsla.be"})
+        self.assertEqual({c["host"] for c in create.data["channels"]}, {"gemsla.be"})
         self.assertEqual({t["name"] for t in create.data["tags"]}, {"Sapphire"})
 
         self.assertTrue(Tag.objects.filter(name="Sapphire").exists())
         post = Post.objects.get(slug="gem-post")
-        self.assertEqual(set(post.channels.values_list("slug", flat=True)), {"gemsla.be"})
+        self.assertEqual(set(post.channels.values_list("host", flat=True)), {"gemsla.be"})
 
         patch = self.client.patch(
-            "/blog/post/gem-post/?channel=all",
+            "/blog/post/gem-post/",
             {"description": "Updated story"},
             format="json",
         )
         self.assertEqual(patch.status_code, status.HTTP_200_OK)
         self.assertEqual(patch.data["description"], "Updated story")
 
-        delete = self.client.delete("/blog/post/gem-post/?channel=all")
+        delete = self.client.delete("/blog/post/gem-post/")
         self.assertEqual(delete.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Post.objects.filter(slug="gem-post").exists())
+
+    def test_staff_mutates_non_default_channel_post_without_host_param(self):
+        self.client.force_login(self.staff)
+        post = self._create_post("Gem Edit", "gem-edit", channels=[self.channel_gem])
+
+        patch = self.client.patch(f"/blog/post/{post.slug}/", {"description": "Edited"}, format="json")
+        self.assertEqual(patch.status_code, status.HTTP_200_OK)
+        self.assertEqual(patch.data["description"], "Edited")
+
+        delete = self.client.delete(f"/blog/post/{post.slug}/")
+        self.assertEqual(delete.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Post.objects.filter(slug="gem-edit").exists())
 
 
 class ChannelAssignmentTest(BlogApiBaseTest):
@@ -113,23 +125,23 @@ class ChannelAssignmentTest(BlogApiBaseTest):
         post = self._create_post("Chan Post", "chan-post", channels=[self.channel_mr])
 
         first = self.client.patch(
-            f"/blog/post/{post.slug}/?channel=all",
-            {"channel_slugs": ["gemsla.be"]},
+            f"/blog/post/{post.slug}/",
+            {"channel_hosts": ["gemsla.be"]},
             format="json",
         )
         self.assertEqual(first.status_code, status.HTTP_200_OK)
         post.refresh_from_db()
-        self.assertEqual(set(post.channels.values_list("slug", flat=True)), {"gemsla.be"})
+        self.assertEqual(set(post.channels.values_list("host", flat=True)), {"gemsla.be"})
 
         second = self.client.patch(
-            f"/blog/post/{post.slug}/?channel=all",
-            {"channel_slugs": ["mineralogy.rocks", "gemsla.be"]},
+            f"/blog/post/{post.slug}/",
+            {"channel_hosts": ["mineralogy.rocks", "gemsla.be"]},
             format="json",
         )
         self.assertEqual(second.status_code, status.HTTP_200_OK)
         post.refresh_from_db()
         self.assertEqual(
-            set(post.channels.values_list("slug", flat=True)),
+            set(post.channels.values_list("host", flat=True)),
             {"mineralogy.rocks", "gemsla.be"},
         )
 
@@ -137,8 +149,8 @@ class ChannelAssignmentTest(BlogApiBaseTest):
         self.client.force_login(self.staff)
         post = self._create_post("Bad Chan", "bad-chan", channels=[self.channel_mr])
         response = self.client.patch(
-            f"/blog/post/{post.slug}/?channel=all",
-            {"channel_slugs": ["does-not-exist"]},
+            f"/blog/post/{post.slug}/",
+            {"channel_hosts": ["does-not-exist"]},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -153,21 +165,17 @@ class ChannelFilteringTest(BlogApiBaseTest):
         return {row["slug"] for row in response.data["results"]}
 
     def test_filter_by_gemsla_channel(self):
-        response = self.client.get("/blog/post/?channel=gemsla.be")
+        response = self.client.get("/blog/post/?host=gemsla.be")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(self._slugs(response), {"gem-only"})
 
     def test_filter_by_mineralogy_channel_excludes_gemsla(self):
-        response = self.client.get("/blog/post/?channel=mineralogy.rocks")
+        response = self.client.get("/blog/post/?host=mineralogy.rocks")
         self.assertEqual(self._slugs(response), {"mr-only"})
 
     def test_default_channel_is_mineralogy_and_excludes_gemsla(self):
         response = self.client.get("/blog/post/")
         self.assertEqual(self._slugs(response), {"mr-only"})
-
-    def test_all_sentinel_returns_every_channel(self):
-        response = self.client.get("/blog/post/?channel=all")
-        self.assertEqual(self._slugs(response), {"gem-only", "mr-only"})
 
 
 class PublicReadFilteringTest(BlogApiBaseTest):
@@ -184,7 +192,7 @@ class PublicReadFilteringTest(BlogApiBaseTest):
 
     def test_staff_includes_unpublished_for_channel(self):
         self.client.force_login(self.staff)
-        response = self.client.get("/blog/post/?channel=mineralogy.rocks")
+        response = self.client.get("/blog/post/?host=mineralogy.rocks")
         self.assertEqual(self._slugs(response), {"pub", "draft"})
 
 
@@ -227,6 +235,38 @@ class TagsFilterTest(BlogApiBaseTest):
         self.assertEqual(self._slugs(response), {"has-quartz"})
 
 
+class SearchTest(BlogApiBaseTest):
+    def setUp(self):
+        self.sapphire = self._create_post(
+            "Sapphire Guide", "sapphire-guide", channels=[self.channel_mr], description="All about blue stones"
+        )
+        self.emerald = self._create_post(
+            "Emerald Basics", "emerald-basics", channels=[self.channel_mr], content="Green beryl deep dive"
+        )
+        self.tagged = self._create_post("Ruby Notes", "ruby-notes", channels=[self.channel_mr])
+        self.tagged.tags.set([Tag.objects.create(name="Corundum")])
+
+    def _slugs(self, response):
+        return {row["slug"] for row in response.data["results"]}
+
+    def test_search_matches_name(self):
+        response = self.client.get("/blog/post/?q=sapphire")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._slugs(response), {"sapphire-guide"})
+
+    def test_search_matches_description_and_content(self):
+        self.assertEqual(self._slugs(self.client.get("/blog/post/?q=blue")), {"sapphire-guide"})
+        self.assertEqual(self._slugs(self.client.get("/blog/post/?q=beryl")), {"emerald-basics"})
+
+    def test_search_matches_tag_name(self):
+        self.assertEqual(self._slugs(self.client.get("/blog/post/?q=corundum")), {"ruby-notes"})
+
+    def test_search_with_no_match_returns_empty(self):
+        response = self.client.get("/blog/post/?q=wrong")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 0)
+
+
 class ViewCountTest(BlogApiBaseTest):
     def setUp(self):
         self.post = self._create_post("Viewed", "viewed", channels=[self.channel_mr])
@@ -261,7 +301,7 @@ class ContentRoundTripTest(BlogApiBaseTest):
         )
 
     def test_gemsla_detail_returns_content_json(self):
-        response = self.client.get(f"/blog/post/{self.gem.slug}/?channel=gemsla.be")
+        response = self.client.get(f"/blog/post/{self.gem.slug}/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["content_json"], CONTENT_JSON)
 
@@ -290,4 +330,4 @@ class ListShapeTest(BlogApiBaseTest):
         row = response.data["results"][0]
         self.assertIn("channels", row)
         self.assertIn("cover_image", row)
-        self.assertEqual({c["slug"] for c in row["channels"]}, {"mineralogy.rocks"})
+        self.assertEqual({c["host"] for c in row["channels"]}, {"mineralogy.rocks"})

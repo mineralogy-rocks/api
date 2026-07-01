@@ -5,6 +5,7 @@ from store.views import FileUploadView
 from store.views import SignedUrlView
 from store.views import StoneColorViewSet
 from store.views import StoneCutViewSet
+from store.views import StoneFileUploadView
 from store.views import StoneTreatmentViewSet
 from store.views import StoneViewSet
 from store.views import StoreReportViewSet
@@ -20,6 +21,7 @@ router.register("reports", StoreReportViewSet, basename="report")
 
 urlpatterns = [
     path("files/", FileUploadView.as_view(), name="file-upload"),
+    path("files/stones/", StoneFileUploadView.as_view(), name="stone-file-upload"),
     path("files/<path:key>/signed-url/", SignedUrlView.as_view(), name="file-signed-url"),
     path("", include(router.urls)),
 ]

@@ -1,5 +1,6 @@
 # -*- coding: UTF-8 -*-
-from django.conf import settings
+from core.storage import signed_url
+from core.storage import store_file
 from django.contrib.auth import get_user_model
 from django.db.models import F
 from django_filters.rest_framework import DjangoFilterBackend
@@ -24,6 +25,9 @@ from users.authentication import CsrfExemptSessionAuthentication
 from users.permissions import IsStaff
 from users.permissions import IsStaffOrReadOnly
 
+from .constants import BLOG_PREFIX
+from .constants import CHANNEL_QUERY_PARAM
+from .constants import DEFAULT_CHANNEL_HOST
 from .filters import PostFilter
 from .models import Category
 from .models import Channel
@@ -36,11 +40,6 @@ from .serializers import PostAdminSerializer
 from .serializers import PostDetailSerializer
 from .serializers import PostListSerializer
 from .serializers import TagListSerializer
-from .storage import public_url
-from .storage import store_public_file
-
-DEFAULT_BLOG_CHANNEL = settings.DEFAULT_BLOG_CHANNEL
-ALL_CHANNELS = "all"
 
 
 class StaffScopedMixin:
@@ -138,11 +137,12 @@ class PostViewSet(StaffScopedMixin, ModelViewSet):
         BrowsableAPIRenderer,
     ]
     authentication_classes = [CsrfExemptSessionAuthentication, JWTAuthentication]
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     lookup_field = "slug"
     lookup_url_kwarg = "slug"
 
     filterset_class = PostFilter
+    search_fields = ["name", "description", "content", "tags__name"]
     ordering_fields = ["id", "name", "description", "content", "views", "likes", "tags", "category", "published_at"]
     ordering = ["-published_at"]
 
@@ -152,9 +152,9 @@ class PostViewSet(StaffScopedMixin, ModelViewSet):
         if not self._is_staff():
             queryset = queryset.filter(is_published=True)
 
-        channel = self.request.query_params.get("channel", DEFAULT_BLOG_CHANNEL)
-        if channel != ALL_CHANNELS:
-            queryset = queryset.filter(channels__slug=channel)
+        if self.action == "list":
+            host = self.request.query_params.get(CHANNEL_QUERY_PARAM, DEFAULT_CHANNEL_HOST)
+            queryset = queryset.filter(channels__host=host)
 
         serializer_class = self.get_serializer_class()
         if hasattr(serializer_class, "setup_eager_loading"):
@@ -203,8 +203,8 @@ class BlogImageUploadView(APIView):
         file = request.FILES.get("file")
         if not file:
             return Response({"detail": "file is required"}, status=status.HTTP_400_BAD_REQUEST)
-        name = store_public_file(file, file.name)
+        name = store_file(file, file.name, prefix=BLOG_PREFIX)
         return Response(
-            {"name": name, "url": public_url(name)},
+            {"name": name, "url": signed_url(name, prefix=BLOG_PREFIX)},
             status=status.HTTP_201_CREATED,
         )

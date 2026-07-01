@@ -33,7 +33,7 @@ class Category(BaseModel, Nameable):
 
 
 class Channel(BaseModel, Nameable, Creatable, Updatable):
-    slug = models.CharField(max_length=100, unique=True)
+    host = models.CharField(max_length=100, unique=True)
 
     class Meta:
         ordering = ["id"]
