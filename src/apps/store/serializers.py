@@ -1,6 +1,9 @@
 # -*- coding: UTF-8 -*-
+from core.storage import signed_url
 from rest_framework import serializers
 
+from .constants import STORE_REPORTS_PREFIX
+from .constants import STORE_STONES_PREFIX
 from .models import Report
 from .models import ReportImage
 from .models import Stone
@@ -8,8 +11,6 @@ from .models import StoneColor
 from .models import StoneCut
 from .models import StoneImage
 from .models import StoneTreatment
-from .storage import public_url
-from .storage import signed_url
 
 
 class StoneColorSerializer(serializers.ModelSerializer):
@@ -65,7 +66,7 @@ class StoneImageSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        data["image_url"] = public_url(instance.image_url)
+        data["image_url"] = signed_url(instance.image_url, prefix=STORE_STONES_PREFIX)
         return data
 
 
@@ -257,7 +258,7 @@ class ReportImageSerializer(serializers.ModelSerializer):
         }
 
     def get_signed_url(self, instance):
-        return signed_url(instance.image_url)
+        return signed_url(instance.image_url, prefix=STORE_REPORTS_PREFIX)
 
 
 class ReportBaseSerializer(serializers.ModelSerializer):

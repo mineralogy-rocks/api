@@ -265,7 +265,7 @@ AWS_SECRET_ACCESS_KEY = os.environ.get("DJANGO_AWS_SECRET_ACCESS_KEY", default="
 AWS_STORAGE_BUCKET_NAME = os.environ.get("DJANGO_AWS_STORAGE_BUCKET_NAME", default="mr-dev")
 AWS_S3_ENDPOINT_URL = os.environ.get("DJANGO_AWS_S3_ENDPOINT_URL", default="https://s3.local")
 
-STORE_SIGNED_URL_EXPIRE = int(os.environ.get("DJANGO_STORE_SIGNED_URL_EXPIRE", default="3600"))
+MEDIA_SIGNED_URL_EXPIRE = int(os.environ.get("DJANGO_MEDIA_SIGNED_URL_EXPIRE", default="3600"))
 
 STORAGES = {
     "default": {
@@ -274,22 +274,13 @@ STORAGES = {
     "staticfiles": {
         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
     },
-    "store_private": {
+    "media": {
         "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
         "OPTIONS": {
-            "location": "store_private",
+            "location": "",
             "default_acl": None,
             "querystring_auth": True,
-            "querystring_expire": STORE_SIGNED_URL_EXPIRE,
-            "file_overwrite": False,
-        },
-    },
-    "store_public": {
-        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
-        "OPTIONS": {
-            "location": "store_public",
-            "default_acl": None,
-            "querystring_auth": False,
+            "querystring_expire": MEDIA_SIGNED_URL_EXPIRE,
             "file_overwrite": False,
         },
     },

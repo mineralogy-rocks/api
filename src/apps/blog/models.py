@@ -32,16 +32,33 @@ class Category(BaseModel, Nameable):
         return self.name
 
 
+class Channel(BaseModel, Nameable, Creatable, Updatable):
+    host = models.CharField(max_length=100, unique=True)
+
+    class Meta:
+        ordering = ["id"]
+
+        verbose_name = "Channel"
+        verbose_name_plural = "Channels"
+
+    def __str__(self):
+        return self.name
+
+
 class Post(BaseModel, Nameable, Creatable, Updatable):
     slug = models.SlugField(max_length=100, unique=True, null=True, blank=True)
     description = models.CharField(max_length=200)
-    content = models.TextField()
+    content = models.TextField(blank=True, default="")
+    content_json = models.JSONField(null=True, blank=True)
+    stone = models.CharField(max_length=255, blank=True, default="")
+    cover_image = models.CharField(max_length=1024, blank=True, default="")
 
     views = models.PositiveIntegerField(default=0)
     likes = models.PositiveIntegerField(default=0)
 
     tags = models.ManyToManyField(Tag, related_name="posts")
     authors = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="posts", blank=True)
+    channels = models.ManyToManyField(Channel, related_name="posts", blank=True)
     category = models.ForeignKey(Category, related_name="posts", on_delete=models.SET_NULL, null=True)
 
     is_published = models.BooleanField(default=False)

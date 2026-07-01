@@ -1,6 +1,7 @@
 import base64
 from io import BytesIO
 
+from core.storage import MEDIA_STORAGE_ALIAS
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
@@ -9,7 +10,6 @@ from rest_framework.test import APITestCase
 from store.models import Report
 from store.models import ReportImage
 from store.models import Stone
-from store.storage import STORE_PRIVATE_STORAGE_ALIAS
 from users.models import User
 
 try:
@@ -181,7 +181,7 @@ class SignedUrlTest(ReportApiBaseTest):
         self.assertIn("signed_url", images[0])
         signed = images[0]["signed_url"]
         self.assertTrue(signed)
-        expected = f"{settings.STORE_LOCAL_MEDIA_URL.rstrip('/')}/store_private/store/reports/secret.jpg"
+        expected = f"{settings.STORE_LOCAL_MEDIA_URL.rstrip('/')}/store/reports/secret.jpg"
         self.assertEqual(signed, expected)
 
 
@@ -265,10 +265,11 @@ class ExportTest(ReportApiBaseTest):
         self.assertTrue(response.content.startswith(b"%PDF"))
 
     def test_pdf_export_embeds_private_report_images(self):
-        storage = storages[STORE_PRIVATE_STORAGE_ALIAS]
+        storage = storages[MEDIA_STORAGE_ALIAS]
         report = self._create_report(title="Exportable with image", stone="Sapphire", public=True)
         image_name = f"store/reports/test-report-image-{report.id}.png"
-        storage.save(image_name, ContentFile(PNG_1X1))
+        stored_name = image_name
+        storage.save(stored_name, ContentFile(PNG_1X1))
         try:
             ReportImage.objects.create(report=report, image_url=image_name, is_headline=True)
             response = self.client.get(f"/store/reports/{report.id}/pdf/")
@@ -279,8 +280,8 @@ class ExportTest(ReportApiBaseTest):
                 image_count += sum(1 for ref in xobjects.values() if ref.get_object().get("/Subtype") == "/Image")
             self.assertGreaterEqual(image_count, 1)
         finally:
-            if storage.exists(image_name):
-                storage.delete(image_name)
+            if storage.exists(stored_name):
+                storage.delete(stored_name)
 
     def test_pdf_export_private_report_blocked_for_anonymous(self):
         report = self._create_report(title="Private export", public=False)

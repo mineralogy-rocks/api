@@ -14,6 +14,8 @@ from urllib.parse import unquote
 from urllib.parse import urlparse
 
 import requests
+from core.storage import MEDIA_STORAGE_ALIAS
+from core.storage import signed_url
 from django.conf import settings
 from django.core.files.storage import storages
 from reportlab.graphics import renderPDF
@@ -26,8 +28,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
-from .storage import STORE_PRIVATE_STORAGE_ALIAS
-from .storage import signed_url
+from .constants import STORE_REPORTS_PREFIX
 
 PAGE_WIDTH, PAGE_HEIGHT = A4
 MARGIN = 18 * mm
@@ -73,14 +74,18 @@ def _fetch_image(image_url):
     storage_name = _private_storage_name(image_url)
     if storage_name:
         try:
-            storage = storages[STORE_PRIVATE_STORAGE_ALIAS]
+            storage = storages[MEDIA_STORAGE_ALIAS]
             with storage.open(storage_name, "rb") as image_file:
                 return ImageReader(BytesIO(image_file.read()))
         except Exception:
             pass
 
     try:
-        url = image_url if str(image_url).startswith(("http://", "https://")) else signed_url(image_url)
+        url = (
+            image_url
+            if str(image_url).startswith(("http://", "https://"))
+            else signed_url(image_url, prefix=STORE_REPORTS_PREFIX)
+        )
         response = requests.get(url, timeout=5)
         response.raise_for_status()
         return ImageReader(BytesIO(response.content))
@@ -91,18 +96,22 @@ def _fetch_image(image_url):
 def _private_storage_name(image_url):
     value = str(image_url)
     if not value.startswith(("http://", "https://")):
-        return value
+        if value.startswith(f"{STORE_REPORTS_PREFIX}/"):
+            return value
+        return f"{STORE_REPORTS_PREFIX}/{value}"
 
     local_media_url = getattr(settings, "STORE_LOCAL_MEDIA_URL", "")
     if local_media_url:
-        private_base = f"{local_media_url.rstrip('/')}/store_private/"
-        if value.startswith(private_base):
-            return unquote(value.removeprefix(private_base))
+        media_base = f"{local_media_url.rstrip('/')}/"
+        if value.startswith(media_base):
+            storage_name = unquote(value.removeprefix(media_base))
+            if storage_name.startswith(f"{STORE_REPORTS_PREFIX}/"):
+                return storage_name
 
     parsed = urlparse(value)
-    marker = "/store_private/"
+    marker = f"/{STORE_REPORTS_PREFIX}/"
     if marker in parsed.path:
-        return unquote(parsed.path.split(marker, 1)[1])
+        return f"{STORE_REPORTS_PREFIX}/{unquote(parsed.path.split(marker, 1)[1])}"
     return None
 
 

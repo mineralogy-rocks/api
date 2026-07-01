@@ -46,22 +46,13 @@ STORAGES["staticfiles"] = {
         "querystring_auth": AWS_QUERYSTRING_AUTH,
     },
 }
-STORAGES["store_private"] = {
+STORAGES["media"] = {
     "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
     "OPTIONS": {
-        "location": "store_private",
+        "location": "",
         "default_acl": None,
         "querystring_auth": True,
-        "querystring_expire": STORE_SIGNED_URL_EXPIRE,
-        "file_overwrite": False,
-    },
-}
-STORAGES["store_public"] = {
-    "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
-    "OPTIONS": {
-        "location": "store_public",
-        "default_acl": None,
-        "querystring_auth": False,
+        "querystring_expire": MEDIA_SIGNED_URL_EXPIRE,
         "file_overwrite": False,
     },
 }

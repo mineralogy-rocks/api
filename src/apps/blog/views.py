@@ -1,35 +1,57 @@
 # -*- coding: UTF-8 -*-
+from core.storage import signed_url
+from core.storage import store_file
 from django.contrib.auth import get_user_model
+from django.db.models import F
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
+from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.generics import get_object_or_404
 from rest_framework.mixins import ListModelMixin
 from rest_framework.mixins import RetrieveModelMixin
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import FormParser
+from rest_framework.parsers import MultiPartParser
+from rest_framework.permissions import AllowAny
 from rest_framework.renderers import BrowsableAPIRenderer
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.viewsets import GenericViewSet
-from rest_framework_api_key.permissions import HasAPIKey
+from rest_framework.viewsets import ModelViewSet
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from users.authentication import CsrfExemptSessionAuthentication
+from users.permissions import IsStaff
+from users.permissions import IsStaffOrReadOnly
 
+from .constants import BLOG_PREFIX
+from .constants import CHANNEL_QUERY_PARAM
+from .constants import DEFAULT_CHANNEL_HOST
 from .filters import PostFilter
 from .models import Category
+from .models import Channel
 from .models import Post
 from .models import Tag
 from .serializers import BlogAuthorSerializer
 from .serializers import CategoryListSerializer
+from .serializers import ChannelSerializer
+from .serializers import PostAdminSerializer
 from .serializers import PostDetailSerializer
 from .serializers import PostListSerializer
 from .serializers import TagListSerializer
 
 
+class StaffScopedMixin:
+    def _is_staff(self):
+        user = getattr(self.request, "user", None)
+        return bool(user and user.is_authenticated and user.is_staff)
+
+
 class TagViewSet(GenericViewSet, ListModelMixin, RetrieveModelMixin):
     queryset = Tag.objects.all()
     serializer_class = TagListSerializer
-    permission_classes = [HasAPIKey | IsAuthenticated]
+    permission_classes = [IsStaffOrReadOnly]
     renderer_classes = [
         JSONRenderer,
         BrowsableAPIRenderer,
@@ -50,7 +72,7 @@ class TagViewSet(GenericViewSet, ListModelMixin, RetrieveModelMixin):
 class CategoryViewSet(GenericViewSet, ListModelMixin, RetrieveModelMixin):
     queryset = Category.objects.all()
     serializer_class = CategoryListSerializer
-    permission_classes = [HasAPIKey | IsAuthenticated]
+    permission_classes = [IsStaffOrReadOnly]
     renderer_classes = [
         JSONRenderer,
         BrowsableAPIRenderer,
@@ -68,9 +90,24 @@ class CategoryViewSet(GenericViewSet, ListModelMixin, RetrieveModelMixin):
         return Response(serializer.data)
 
 
+class ChannelViewSet(GenericViewSet, ListModelMixin, RetrieveModelMixin):
+    queryset = Channel.objects.all()
+    serializer_class = ChannelSerializer
+    permission_classes = [IsStaffOrReadOnly]
+    renderer_classes = [
+        JSONRenderer,
+        BrowsableAPIRenderer,
+    ]
+    authentication_classes = [CsrfExemptSessionAuthentication, JWTAuthentication]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+
+    ordering_fields = ["id", "name", "slug"]
+    ordering = ["id"]
+
+
 class AuthorViewSet(GenericViewSet, ListModelMixin):
     serializer_class = BlogAuthorSerializer
-    permission_classes = [HasAPIKey | IsAuthenticated]
+    permission_classes = [IsStaffOrReadOnly]
     renderer_classes = [
         JSONRenderer,
         BrowsableAPIRenderer,
@@ -91,36 +128,46 @@ class AuthorViewSet(GenericViewSet, ListModelMixin):
         return Response(serializer.data)
 
 
-class PostViewSet(GenericViewSet, ListModelMixin, RetrieveModelMixin):
-    queryset = Post.objects.filter(is_published=True)
+class PostViewSet(StaffScopedMixin, ModelViewSet):
+    queryset = Post.objects.all()
     serializer_class = PostListSerializer
-    permission_classes = [HasAPIKey | IsAuthenticated]
+    permission_classes = [IsStaffOrReadOnly]
     renderer_classes = [
         JSONRenderer,
         BrowsableAPIRenderer,
     ]
-    authentication_classes = [SessionAuthentication, JWTAuthentication]
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    authentication_classes = [CsrfExemptSessionAuthentication, JWTAuthentication]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     lookup_field = "slug"
     lookup_url_kwarg = "slug"
 
     filterset_class = PostFilter
+    search_fields = ["name", "description", "content", "tags__name"]
     ordering_fields = ["id", "name", "description", "content", "views", "likes", "tags", "category", "published_at"]
     ordering = ["-published_at"]
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = Post.objects.all()
+
+        if not self._is_staff():
+            queryset = queryset.filter(is_published=True)
+
+        if self.action == "list":
+            host = self.request.query_params.get(CHANNEL_QUERY_PARAM, DEFAULT_CHANNEL_HOST)
+            queryset = queryset.filter(channels__host=host)
 
         serializer_class = self.get_serializer_class()
         if hasattr(serializer_class, "setup_eager_loading"):
             queryset = serializer_class.setup_eager_loading(queryset=queryset, request=self.request)
 
-        return queryset.prefetch_related("authors").distinct()
+        return queryset.distinct()
 
     def get_serializer_class(self):
+        if self._is_staff():
+            return PostAdminSerializer
         if self.action == "retrieve":
             return PostDetailSerializer
-        return self.serializer_class
+        return PostListSerializer
 
     @action(detail=True, methods=["get"], url_path="views")
     def views(self, request, slug=None):
@@ -132,16 +179,32 @@ class PostViewSet(GenericViewSet, ListModelMixin, RetrieveModelMixin):
         post = get_object_or_404(Post, slug=slug)
         return Response({"count": post.likes})
 
-    @action(detail=True, methods=["post"], url_path="increment-views")
+    @action(detail=True, methods=["post"], url_path="increment-views", permission_classes=[AllowAny])
     def increment_views(self, request, slug=None):
         post = get_object_or_404(Post, slug=slug)
-        post.views += 1
-        post.save()
+        Post.objects.filter(pk=post.pk).update(views=F("views") + 1)
+        post.refresh_from_db(fields=["views"])
         return Response({"views": post.views})
 
-    @action(detail=True, methods=["post"], url_path="increment-likes")
+    @action(detail=True, methods=["post"], url_path="increment-likes", permission_classes=[AllowAny])
     def increment_likes(self, request, slug=None):
         post = get_object_or_404(Post, slug=slug)
-        post.likes += 1
-        post.save()
+        Post.objects.filter(pk=post.pk).update(likes=F("likes") + 1)
+        post.refresh_from_db(fields=["likes"])
         return Response({"likes": post.likes})
+
+
+class BlogImageUploadView(APIView):
+    authentication_classes = [CsrfExemptSessionAuthentication, JWTAuthentication]
+    permission_classes = [IsStaff]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        file = request.FILES.get("file")
+        if not file:
+            return Response({"detail": "file is required"}, status=status.HTTP_400_BAD_REQUEST)
+        name = store_file(file, file.name, prefix=BLOG_PREFIX)
+        return Response(
+            {"name": name, "url": signed_url(name, prefix=BLOG_PREFIX)},
+            status=status.HTTP_201_CREATED,
+        )

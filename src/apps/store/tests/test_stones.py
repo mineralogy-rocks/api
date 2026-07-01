@@ -268,9 +268,9 @@ class DetailTest(StoneApiBaseTest):
 
         images = response.data["images"]
         self.assertEqual([img["display_order"] for img in images], [1, 2])
-        expected_url = f"{settings.STORE_LOCAL_MEDIA_URL.rstrip('/')}/store_public/a.jpg"
+        expected_url = f"{settings.STORE_LOCAL_MEDIA_URL.rstrip('/')}/store/stones/a.jpg"
         self.assertEqual(images[0]["image_url"], expected_url)
-        self.assertIn("store_public/", images[1]["image_url"])
+        self.assertIn("store/stones/", images[1]["image_url"])
 
     def test_sold_selling_detail_visible_to_anon(self):
         response = self.client.get(f"/store/stones/{self.sold.id}/")
